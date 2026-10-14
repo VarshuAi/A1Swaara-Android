@@ -1,0 +1,21 @@
+plugins {
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.android.lint")
+}
+
+dependencies {
+    implementation(projects.providers.common)
+
+    implementation(libs.kotlin.coroutines)
+
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.client.serialization)
+    implementation(libs.ktor.serialization.json)
+
+}
+
+kotlin {
+    jvmToolchain(libs.versions.jvm.get().toInt())
+}

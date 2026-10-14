@@ -1,0 +1,392 @@
+package com.varshuai.a1swaara.ui.screens.home
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.times
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.varshuai.a1swaara.LocalAppContainer
+import com.varshuai.a1swaara.LocalPlayerAwareWindowInsets
+import com.varshuai.a1swaara.LocalPlayerServiceBinder
+import com.varshuai.a1swaara.R
+import com.varshuai.a1swaara.ui.components.FadingRow
+import com.varshuai.a1swaara.ui.components.LocalMenuState
+import com.varshuai.a1swaara.ui.components.ShimmerHost
+import com.varshuai.a1swaara.ui.components.themed.FloatingActionsContainerWithScrollToTop
+import com.varshuai.a1swaara.ui.components.themed.Header
+import com.varshuai.a1swaara.ui.components.themed.NonQueuedMediaItemMenu
+import com.varshuai.a1swaara.ui.components.themed.RetryMessage
+import com.varshuai.a1swaara.ui.components.themed.SecondaryTextButton
+import com.varshuai.a1swaara.ui.components.themed.TextPlaceholder
+import com.varshuai.a1swaara.ui.items.AlbumItem
+import com.varshuai.a1swaara.ui.items.AlbumItemPlaceholder
+import com.varshuai.a1swaara.ui.items.SongItem
+import com.varshuai.a1swaara.ui.screens.Route
+import com.varshuai.a1swaara.ui.state.LoadState
+import com.varshuai.a1swaara.ui.state.contentOrNull
+import com.varshuai.a1swaara.ui.viewmodels.HomeDiscoveryViewModel
+import com.varshuai.a1swaara.utils.LocalPlaybackActions
+import com.varshuai.a1swaara.utils.asMediaItem
+import com.varshuai.a1swaara.utils.center
+import com.varshuai.a1swaara.utils.color
+import com.varshuai.a1swaara.utils.rememberSnapLayoutInfo
+import com.varshuai.a1swaara.utils.secondary
+import com.varshuai.a1swaara.utils.semiBold
+import app.a1swaara.compose.persist.persist
+import app.a1swaara.core.ui.Dimensions
+import app.a1swaara.core.ui.LocalAppearance
+import app.a1swaara.core.ui.shimmer
+import app.a1swaara.core.ui.utils.isLandscape
+import app.a1swaara.providers.youtubemusic.innertube.YoutubeMusicInnertube
+import app.a1swaara.providers.youtubemusic.innertube.models.NavigationEndpoint
+
+@OptIn(ExperimentalFoundationApi::class)
+@Route
+@Composable
+fun HomeDiscovery(
+    onMoodClick: (mood: YoutubeMusicInnertube.Mood.Item) -> Unit,
+    onNewReleaseAlbumClick: (String) -> Unit,
+    onSearchClick: () -> Unit,
+    onMoreMoodsClick: () -> Unit,
+    onMoreAlbumsClick: () -> Unit,
+    onPlaylistClick: (browseId: String) -> Unit
+) {
+    val viewModel: HomeDiscoveryViewModel = viewModel(
+        key = "home_discovery",
+        factory = HomeDiscoveryViewModel.factory(LocalAppContainer.current.homeRepository)
+    )
+    val (colorPalette, typography) = LocalAppearance.current
+    val windowInsets = LocalPlayerAwareWindowInsets.current
+    val menuState = LocalMenuState.current
+    val binder = LocalPlayerServiceBinder.current
+    val playbackActions = LocalPlaybackActions.current
+
+    val scrollState = rememberScrollState()
+    val moodGridState = rememberLazyGridState()
+
+    val endPaddingValues = windowInsets
+        .only(WindowInsetsSides.End)
+        .asPaddingValues()
+
+    val sectionTextModifier = Modifier
+        .padding(horizontal = 16.dp)
+        .padding(top = 24.dp, bottom = 8.dp)
+        .padding(endPaddingValues)
+
+    var cachedDiscoverPage by persist<YoutubeMusicInnertube.DiscoverPage?>("home/discovery")
+    val discoverState by viewModel.uiState.collectAsStateWithLifecycle()
+    val discoverPage = discoverState.contentOrNull() ?: cachedDiscoverPage
+
+    LaunchedEffect(Unit) {
+        viewModel.load(cachedPage = cachedDiscoverPage)
+    }
+    LaunchedEffect(discoverState) {
+        (discoverState as? LoadState.Content)?.value?.let { cachedDiscoverPage = it }
+    }
+
+    BoxWithConstraints {
+        val widthFactor = if (isLandscape && maxWidth * 0.475f >= 320.dp) 0.475f else 0.75f
+        val moodSnapLayoutInfoProvider = rememberSnapLayoutInfo(
+            lazyGridState = moodGridState,
+            positionInLayout = { layoutSize, itemSize ->
+                layoutSize * widthFactor / 2f - itemSize / 2f
+            }
+        )
+        val itemWidth = maxWidth * widthFactor
+
+        Column(
+            modifier = Modifier
+                .background(colorPalette.background0)
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(
+                    windowInsets
+                        .only(WindowInsetsSides.Vertical)
+                        .asPaddingValues()
+                )
+        ) {
+            Header(
+                title = stringResource(R.string.discover),
+                modifier = Modifier.padding(endPaddingValues)
+            )
+
+            discoverPage?.let { page ->
+                if (page.moods.isNotEmpty()) {
+                    DiscoverySectionHeader(
+                        title = stringResource(R.string.moods_and_genres),
+                        onMoreClick = onMoreMoodsClick,
+                        modifier = sectionTextModifier
+                    )
+
+                    LazyHorizontalGrid(
+                        state = moodGridState,
+                        rows = GridCells.Fixed(4),
+                        flingBehavior = rememberSnapFlingBehavior(moodSnapLayoutInfoProvider),
+                        contentPadding = endPaddingValues,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height((4 * (64 + 4)).dp)
+                    ) {
+                        items(
+                            items = page.moods.sortedBy { it.title },
+                            key = { it.endpoint.params ?: it.title }
+                        ) {
+                            MoodItem(
+                                mood = it,
+                                onClick = { it.endpoint.browseId?.let { _ -> onMoodClick(it) } },
+                                modifier = Modifier
+                                    .width(itemWidth)
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (page.newReleaseAlbums.isNotEmpty()) {
+                    DiscoverySectionHeader(
+                        title = stringResource(R.string.new_released_albums),
+                        onMoreClick = onMoreAlbumsClick,
+                        modifier = sectionTextModifier
+                    )
+
+                    LazyRow(contentPadding = endPaddingValues) {
+                        items(items = page.newReleaseAlbums, key = { it.key }) {
+                            AlbumItem(
+                                album = it,
+                                thumbnailSize = Dimensions.thumbnails.album,
+                                alternative = true,
+                                modifier = Modifier.clickable(onClick = { onNewReleaseAlbumClick(it.key) })
+                            )
+                        }
+                    }
+                }
+
+                if (page.trending.songs.isNotEmpty()) {
+                    DiscoverySectionHeader(
+                        title = stringResource(R.string.trending),
+                        onMoreClick = page.trending.endpoint?.browseId?.let { browseId ->
+                            { onPlaylistClick(browseId) }
+                        },
+                        modifier = sectionTextModifier
+                    )
+
+                    val trendingGridState = rememberLazyGridState()
+                    val trendingSnapLayoutInfoProvider = rememberSnapLayoutInfo(
+                        lazyGridState = trendingGridState,
+                        positionInLayout = { layoutSize, itemSize ->
+                            (layoutSize * widthFactor / 2f - itemSize / 2f)
+                        }
+                    )
+
+                    LazyHorizontalGrid(
+                        state = trendingGridState,
+                        rows = GridCells.Fixed(4),
+                        flingBehavior = rememberSnapFlingBehavior(trendingSnapLayoutInfoProvider),
+                        contentPadding = endPaddingValues,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height((Dimensions.thumbnails.song + Dimensions.items.verticalPadding * 2) * 4)
+                    ) {
+                        items(
+                            items = page.trending.songs,
+                            key = YoutubeMusicInnertube.SongItem::key
+                        ) { song ->
+                            SongItem(
+                                song = song,
+                                thumbnailSize = Dimensions.thumbnails.song,
+                                modifier = Modifier
+                                    .combinedClickable(
+                                        onLongClick = {
+                                            menuState.display {
+                                                NonQueuedMediaItemMenu(
+                                                    onDismiss = menuState::hide,
+                                                    mediaItem = song.asMediaItem
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            val mediaItem = song.asMediaItem
+                                            playbackActions.play(mediaItem)
+                                            binder?.setupRadio(
+                                                NavigationEndpoint.Endpoint.Watch(videoId = mediaItem.mediaId)
+                                            )
+                                        }
+                                    )
+                                    .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                                    .width(itemWidth),
+                                showDuration = false
+                            )
+                        }
+                    }
+                }
+            } ?: (discoverState as? LoadState.Error)?.let {
+                RetryMessage(
+                    onRetry = { viewModel.load(force = true) },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                )
+            } ?: ShimmerHost {
+                TextPlaceholder(modifier = sectionTextModifier)
+                LazyHorizontalGrid(
+                    state = moodGridState,
+                    rows = GridCells.Fixed(4),
+                    flingBehavior = rememberSnapFlingBehavior(moodSnapLayoutInfoProvider),
+                    contentPadding = endPaddingValues,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4 * (Dimensions.items.moodHeight + 4.dp))
+                ) {
+                    items(16) {
+                        MoodItemPlaceholder(
+                            width = itemWidth,
+                            modifier = Modifier.padding(4.dp)
+                        )
+                    }
+                }
+                TextPlaceholder(modifier = sectionTextModifier)
+                Row {
+                    repeat(2) {
+                        AlbumItemPlaceholder(
+                            thumbnailSize = Dimensions.thumbnails.album,
+                            alternative = true
+                        )
+                    }
+                }
+            }
+        }
+
+        FloatingActionsContainerWithScrollToTop(
+            scrollState = scrollState,
+            icon = R.drawable.search,
+            onClick = onSearchClick
+        )
+    }
+}
+
+@Composable
+private fun DiscoverySectionHeader(
+    title: String,
+    onMoreClick: (() -> Unit)?,
+    modifier: Modifier,
+    rowModifier: Modifier = Modifier
+) {
+    val typography = LocalAppearance.current.typography
+
+    Row(
+        modifier = rowModifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        FadingRow(
+            modifier = Modifier.weight(
+                weight = 1f,
+                fill = false
+            )
+        ) {
+            BasicText(
+                text = title,
+                style = typography.m.semiBold,
+                modifier = modifier
+            )
+        }
+
+        onMoreClick?.let {
+            SecondaryTextButton(
+                text = stringResource(R.string.more),
+                onClick = it,
+                modifier = modifier
+            )
+        }
+    }
+}
+
+@Composable
+fun MoodItem(
+    mood: YoutubeMusicInnertube.Mood.Item,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val typography = LocalAppearance.current.typography
+    val thumbnailShape = LocalAppearance.current.thumbnailShape
+
+    val color by remember { derivedStateOf { Color(mood.stripeColor) } }
+
+    ElevatedCard(
+        modifier = modifier.height(Dimensions.items.moodHeight),
+        shape = thumbnailShape,
+        colors = CardDefaults.elevatedCardColors(containerColor = color)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onClick() },
+            contentAlignment = Alignment.CenterStart
+        ) {
+            BasicText(
+                text = mood.title,
+                style = typography.xs.semiBold.color(
+                    if (color.luminance() >= 0.5f) Color.Black else Color.White
+                ),
+                modifier = Modifier.padding(start = 24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun MoodItemPlaceholder(
+    width: Dp,
+    modifier: Modifier = Modifier
+) = Spacer(
+    modifier = modifier
+        .background(
+            color = LocalAppearance.current.colorPalette.shimmer,
+            shape = LocalAppearance.current.thumbnailShape
+        )
+        .size(
+            width = width,
+            height = Dimensions.items.moodHeight
+        )
+)

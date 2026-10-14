@@ -1,0 +1,61 @@
+@file:Suppress("UnstableApiUsage")
+
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
+    repositories {
+        google()
+        mavenCentral()
+        maven("https://jitpack.io")
+    }
+}
+
+pluginManagement {
+    val kotlinVersion = "2.4.10"
+    resolutionStrategy {
+        repositories {
+            google()
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+    plugins {
+        id("com.android.application") version "9.3.1"
+        id("com.android.library") version "9.3.1"
+        id("com.android.lint") version "9.3.1"
+        id("org.jetbrains.kotlin.jvm") version kotlinVersion
+        id("org.jetbrains.kotlin.plugin.compose") version kotlinVersion
+        id("org.jetbrains.kotlin.plugin.parcelize") version kotlinVersion
+        id("org.jetbrains.kotlin.plugin.serialization") version kotlinVersion
+    }
+}
+
+rootProject.name = "A1-Swaara"
+
+val newPipeExtractorDir = System.getenv("NEWPIPE_EXTRACTOR_DIR") ?: "NewPipeExtractor"
+
+includeBuild(newPipeExtractorDir) {
+    dependencySubstitution {
+        substitute(module("com.github.TeamNewPipe:NewPipeExtractor"))
+            .using(project(":extractor"))
+    }
+}
+
+include(":app")
+include(":core:data")
+include(":core:material-compat")
+include(":core:ui")
+include(":compose:persist")
+include(":compose:preferences")
+include(":compose:routing")
+include(":compose:reordering")
+include(":providers:common")
+include(":providers:github")
+include(":providers:youtube-music")
+include(":providers:kugou")
+include(":providers:lrclib")
+include(":providers:piped")
+include(":providers:sponsorblock")
+include(":providers:translate")

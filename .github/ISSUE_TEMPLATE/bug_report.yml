@@ -1,0 +1,50 @@
+name: Bug Report
+description: Create a report to help us fix a defect or unexpected behavior in A1 Swaara.
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please ensure you have searched existing issues before submitting.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this behavior?
+      placeholder: |
+        1. Open A1 Swaara
+        2. Play track '...'
+        3. Tap on '...'
+        4. Observe unexpected behavior
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: App Version
+      description: Version of A1 Swaara (e.g. v1.0.9)
+      placeholder: v1.0.9
+    validations:
+      required: true
+  - type: input
+    id: device_info
+    attributes:
+      label: Device & OS
+      description: Device model and Android version
+      placeholder: Pixel 7, Android 14
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Crash Traces
+      description: Paste any logcat or error messages here.
+      render: shell

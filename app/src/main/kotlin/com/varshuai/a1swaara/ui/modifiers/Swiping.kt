@@ -1,0 +1,369 @@
+package com.varshuai.a1swaara.ui.modifiers
+
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.calculateTargetValue
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.splineBasedDecay
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.verticalDrag
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import app.a1swaara.core.ui.LocalAppearance
+import app.a1swaara.core.ui.utils.px
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlin.time.Duration
+
+@Stable
+@JvmInline
+value class SwipeState @PublishedApi internal constructor(
+    private val offsetLazy: Lazy<Animatable<Float, AnimationVector1D>> = lazy { Animatable(0f) }
+) {
+    internal val offset get() = offsetLazy.value
+
+    @Composable
+    fun calculateOffset(bounds: ClosedRange<Dp>? = null) =
+        offset.value.px.dp.let { if (bounds == null) it else it.coerceIn(bounds) }
+
+    @PublishedApi
+    internal fun recycle() = Unit
+}
+
+@Suppress("NOTHING_TO_INLINE")
+@Composable
+inline fun rememberSwipeState(key: Any?): SwipeState {
+    val state = remember(key) { SwipeState() }
+
+    DisposableEffect(key) {
+        onDispose {
+            state.recycle()
+        }
+    }
+
+    return state
+}
+
+fun Modifier.onSwipe(
+    state: SwipeState? = null,
+    key: Any = Unit,
+    animateOffset: Boolean = false,
+    orientation: Orientation = Orientation.Horizontal,
+    delay: Duration = Duration.ZERO,
+    decay: Density.() -> DecayAnimationSpec<Float> = { splineBasedDecay(this) },
+    animationSpec: AnimationSpec<Float> = spring(),
+    bounds: ClosedRange<Dp>? = null,
+    requireUnconsumed: Boolean = false,
+    onSwipeOut: suspend (animationJob: Job) -> Unit
+) = onSwipe(
+    state = state,
+    key = key,
+    animateOffset = animateOffset,
+    onSwipeLeft = onSwipeOut,
+    onSwipeRight = onSwipeOut,
+    orientation = orientation,
+    delay = delay,
+    decay = decay,
+    animationSpec = animationSpec,
+    requireUnconsumed = requireUnconsumed,
+    bounds = bounds
+)
+
+@Suppress("CyclomaticComplexMethod")
+fun Modifier.onSwipe(
+    state: SwipeState? = null,
+    key: Any = Unit,
+    animateOffset: Boolean = false,
+    onSwipeLeft: suspend (animationJob: Job) -> Unit = { },
+    onSwipeRight: suspend (animationJob: Job) -> Unit = { },
+    orientation: Orientation = Orientation.Horizontal,
+    delay: Duration = Duration.ZERO,
+    decay: Density.() -> DecayAnimationSpec<Float> = { splineBasedDecay(this) },
+    animationSpec: AnimationSpec<Float> = spring(),
+    bounds: ClosedRange<Dp>? = null,
+    requireUnconsumed: Boolean = false
+) = this.composed {
+    val swipeState = state ?: rememberSwipeState(key)
+
+    pointerInput(key) {
+        coroutineScope {
+            val velocityTracker = VelocityTracker()
+
+            // fling loop, doesn't really offset anything but simulates the animation beforehand
+            while (isActive) {
+                velocityTracker.resetTracking()
+
+                awaitPointerEventScope {
+                    val pointer = awaitFirstDown(requireUnconsumed = requireUnconsumed).id
+                    launch { swipeState.offset.snapTo(0f) }
+
+                    val onDrag: (PointerInputChange) -> Unit = {
+                        val change =
+                            if (orientation == Orientation.Horizontal) it.positionChange().x
+                            else it.positionChange().y
+
+                        launch { swipeState.offset.snapTo(swipeState.offset.value + change) }
+
+                        velocityTracker.addPosition(it.uptimeMillis, it.position)
+                        if (change != 0f) it.consume()
+                    }
+
+                    if (orientation == Orientation.Horizontal) {
+                        awaitHorizontalTouchSlopOrCancellation(pointer) { change, _ -> onDrag(change) }
+                            ?: return@awaitPointerEventScope
+                        horizontalDrag(pointer, onDrag)
+                    } else {
+                        awaitVerticalTouchSlopOrCancellation(pointer) { change, _ -> onDrag(change) }
+                            ?: return@awaitPointerEventScope
+                        verticalDrag(pointer, onDrag)
+                    }
+                }
+
+                // drag completed, calculate velocity
+                val targetOffset = decay().calculateTargetValue(
+                    initialValue = swipeState.offset.value,
+                    initialVelocity = velocityTracker.calculateVelocity()
+                        .let { if (orientation == Orientation.Horizontal) it.x else it.y }
+                )
+                val size = if (orientation == Orientation.Horizontal) size.width else size.height
+
+                launch animationEnd@{
+                    when {
+                        targetOffset >= size / 2 -> {
+                            val animationJob = launch {
+                                swipeState.offset.animateTo(
+                                    targetValue = size.toFloat(),
+                                    animationSpec = animationSpec
+                                )
+                            }
+                            delay(delay)
+                            onSwipeRight(animationJob)
+                        }
+
+                        targetOffset <= -size / 2 -> {
+                            val animationJob = launch {
+                                swipeState.offset.animateTo(
+                                    targetValue = -size.toFloat(),
+                                    animationSpec = animationSpec
+                                )
+                            }
+                            delay(delay)
+                            onSwipeLeft(animationJob)
+                        }
+                    }
+                    swipeState.offset.animateTo(
+                        targetValue = 0f,
+                        animationSpec = animationSpec
+                    )
+                }
+            }
+        }
+    }.let { modifier ->
+        when {
+            animateOffset && orientation == Orientation.Horizontal ->
+                modifier.offset(x = swipeState.calculateOffset(bounds = bounds))
+
+            animateOffset && orientation == Orientation.Vertical ->
+                modifier.offset(y = swipeState.calculateOffset(bounds = bounds))
+
+            else -> modifier
+        }
+    }
+}
+
+fun Modifier.swipeToClose(
+    key: Any = Unit,
+    state: SwipeState? = null,
+    delay: Duration = Duration.ZERO,
+    decay: Density.() -> DecayAnimationSpec<Float> = { splineBasedDecay(this) },
+    requireUnconsumed: Boolean = false,
+    onClose: suspend (animationJob: Job) -> Unit
+) = this.composed {
+    val swipeState = state ?: rememberSwipeState(key)
+
+    val density = LocalDensity.current
+
+    var currentWidth by remember { mutableIntStateOf(0) }
+    val currentWidthDp by remember { derivedStateOf { currentWidth.px.dp(density) } }
+    val bounds by remember { derivedStateOf { -currentWidthDp..0.dp } }
+
+    this
+        .onSizeChanged { currentWidth = it.width }
+        .alpha((currentWidthDp + swipeState.calculateOffset(bounds = bounds)) / currentWidthDp)
+        .onSwipe(
+            state = swipeState,
+            key = key,
+            animateOffset = true,
+            onSwipeLeft = onClose,
+            orientation = Orientation.Horizontal,
+            delay = delay,
+            decay = decay,
+            requireUnconsumed = requireUnconsumed,
+            bounds = bounds
+        )
+}
+
+private fun calculateSwipeBounds(
+    currentWidthDp: Dp,
+    enableSwipeLeft: Boolean,
+    enableSwipeRight: Boolean
+): ClosedRange<Dp> = when {
+    enableSwipeLeft && enableSwipeRight -> -currentWidthDp..currentWidthDp
+    enableSwipeLeft -> -currentWidthDp..0.dp
+    enableSwipeRight -> 0.dp..currentWidthDp
+    else -> 0.dp..0.dp
+}
+
+private fun calculateSwipeAlpha(
+    currentWidth: Int,
+    currentOffsetPx: Float,
+    enableSwipeLeft: Boolean,
+    enableSwipeRight: Boolean
+): Float {
+    if (currentWidth == 0) return 1f
+
+    val widthPx = currentWidth.toFloat()
+    val offsetAbs = kotlin.math.abs(currentOffsetPx)
+    return when {
+        enableSwipeLeft && enableSwipeRight ->
+            ((widthPx - offsetAbs) / widthPx).coerceIn(0f, 1f)
+
+        enableSwipeLeft ->
+            ((widthPx + currentOffsetPx) / widthPx).coerceIn(0f, 1f)
+
+        enableSwipeRight ->
+            ((widthPx - currentOffsetPx) / widthPx).coerceIn(0f, 1f)
+
+        else -> 1f
+    }
+}
+
+fun Modifier.swipeToAction(
+    key: Any = Unit,
+    state: SwipeState? = null,
+    delay: Duration = Duration.ZERO,
+    decay: Density.() -> DecayAnimationSpec<Float> = { splineBasedDecay(this) },
+    requireUnconsumed: Boolean = false,
+    enableSwipeLeft: Boolean = true,
+    enableSwipeRight: Boolean = true,
+    @DrawableRes leftActionIcon: Int? = null,
+    @DrawableRes rightActionIcon: Int? = null,
+    onSwipeLeft: suspend (animationJob: Job) -> Unit = { },
+    onSwipeRight: suspend (animationJob: Job) -> Unit = { }
+) = this.composed {
+    val swipeState = state ?: rememberSwipeState(key)
+
+    val density = LocalDensity.current
+    val (colorPalette) = LocalAppearance.current
+    val leftPainter = leftActionIcon?.let { painterResource(it) }
+    val rightPainter = rightActionIcon?.let { painterResource(it) }
+
+    var currentWidth by remember { mutableIntStateOf(0) }
+    val currentWidthDp by remember { derivedStateOf { currentWidth.px.dp(density) } }
+    val bounds by remember(currentWidthDp, enableSwipeLeft, enableSwipeRight) {
+        derivedStateOf {
+            calculateSwipeBounds(
+                currentWidthDp = currentWidthDp,
+                enableSwipeLeft = enableSwipeLeft,
+                enableSwipeRight = enableSwipeRight
+            )
+        }
+    }
+
+    val currentOffsetPx by remember { derivedStateOf { swipeState.offset.value } }
+    val alpha by remember(currentWidth, currentOffsetPx, enableSwipeLeft, enableSwipeRight) {
+        derivedStateOf {
+            calculateSwipeAlpha(
+                currentWidth = currentWidth,
+                currentOffsetPx = currentOffsetPx,
+                enableSwipeLeft = enableSwipeLeft,
+                enableSwipeRight = enableSwipeRight
+            )
+        }
+    }
+
+    this
+        .onSizeChanged { currentWidth = it.width }
+        .drawWithContent {
+            val actionPainter = when {
+                currentOffsetPx < 0 -> leftPainter
+                currentOffsetPx > 0 -> rightPainter
+                else -> null
+            }
+
+            if (actionPainter != null && currentWidth > 0) {
+                val iconSize = 24.dp.toPx()
+                val horizontalPadding = 16.dp.toPx()
+                val iconAlpha = (kotlin.math.abs(currentOffsetPx) / currentWidth).coerceIn(0f, 1f)
+                val iconLeft = if (currentOffsetPx < 0) {
+                    size.width - iconSize - horizontalPadding
+                } else {
+                    horizontalPadding
+                }
+
+                translate(iconLeft, (size.height - iconSize) / 2f) {
+                    with(actionPainter) {
+                        draw(
+                            size = Size(iconSize, iconSize),
+                            alpha = iconAlpha,
+                            colorFilter = ColorFilter.tint(colorPalette.text)
+                        )
+                    }
+                }
+            }
+
+            drawContent()
+        }
+        .graphicsLayer(alpha = alpha)
+        .onSwipe(
+            state = swipeState,
+            key = key,
+            animateOffset = true,
+            onSwipeLeft = {
+                if (enableSwipeLeft) onSwipeLeft(it)
+            },
+            onSwipeRight = {
+                if (enableSwipeRight) onSwipeRight(it)
+            },
+            orientation = Orientation.Horizontal,
+            delay = delay,
+            decay = decay,
+            requireUnconsumed = requireUnconsumed,
+            bounds = bounds
+        )
+}

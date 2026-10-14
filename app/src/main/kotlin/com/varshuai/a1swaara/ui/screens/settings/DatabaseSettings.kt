@@ -1,0 +1,236 @@
+package com.varshuai.a1swaara.ui.screens.settings
+
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.varshuai.a1swaara.LocalAppContainer
+import com.varshuai.a1swaara.R
+import com.varshuai.a1swaara.preferences.DataPreferences
+import com.varshuai.a1swaara.service.PlayerService
+import com.varshuai.a1swaara.ui.screens.Route
+import com.varshuai.a1swaara.ui.viewmodels.DatabaseSettingsViewModel
+import com.varshuai.a1swaara.utils.intent
+import com.varshuai.a1swaara.utils.toast
+import com.varshuai.a1swaara.work.DatabaseAutoBackupWorker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.system.exitProcess
+
+@Route
+@Composable
+fun DatabaseSettings() = with(DataPreferences) {
+    val viewModel: DatabaseSettingsViewModel = viewModel(
+        key = "database_settings",
+        factory = DatabaseSettingsViewModel.factory(LocalAppContainer.current.databaseSettingsRepository)
+    )
+    val context = LocalContext.current
+    val errorMessage = stringResource(R.string.error_message)
+    val noFileChooserInstalled = stringResource(R.string.no_file_chooser_installed)
+    val folderNotSelected = stringResource(R.string.backup_folder_not_selected)
+    val coroutineScope = rememberCoroutineScope()
+
+    val blacklistLength by viewModel.observeBlacklistLength().collectAsStateWithLifecycle(initialValue = 0)
+
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(mimeType = "application/vnd.sqlite3")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        coroutineScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    requireNotNull(
+                        context.applicationContext.contentResolver.openOutputStream(uri)
+                    ) { "Failed to open backup output stream" }
+                        .use { output -> viewModel.backupTo(output) }
+                }
+            }.onFailure {
+                context.toast(errorMessage)
+            }
+        }
+    }
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        coroutineScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    requireNotNull(
+                        context.applicationContext.contentResolver.openInputStream(uri)
+                    ) { "Failed to open restore input stream" }
+                        .use { input -> viewModel.restoreFrom(input) }
+                }
+                context.stopService(context.intent<PlayerService>())
+                exitProcess(0)
+            }.onFailure {
+                context.toast(errorMessage)
+            }
+        }
+    }
+
+    val autoBackupFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) {
+            return@rememberLauncherForActivityResult
+        }
+
+        runCatching {
+            context.applicationContext.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            if (autoDatabaseBackupTreeUri != uri.toString()) {
+                autoDatabaseBackupDocumentUri = ""
+                autoDatabaseBackupLastSha256 = ""
+            }
+            autoDatabaseBackupTreeUri = uri.toString()
+            DatabaseAutoBackupWorker.upsert(
+                context = context.applicationContext,
+                enabled = autoDatabaseBackupEnabled,
+                treeUri = uri.toString()
+            )
+        }.onFailure {
+            context.toast(errorMessage)
+        }
+    }
+
+    SettingsCategoryScreen(title = stringResource(R.string.database)) {
+        SettingsGroup(title = stringResource(R.string.cleanup)) {
+            SwitchSettingsEntry(
+                title = stringResource(R.string.pause_playback_history),
+                text = stringResource(R.string.pause_playback_history_description),
+                isChecked = pauseHistory,
+                onCheckedChange = { pauseHistory = !pauseHistory }
+            )
+
+            AnimatedVisibility(visible = pauseHistory) {
+                SettingsDescription(
+                    text = stringResource(R.string.pause_playback_history_warning),
+                    important = true
+                )
+            }
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.pause_playback_time),
+                text = stringResource(
+                    R.string.format_pause_playback_time_description,
+                    topListLength
+                ),
+                isChecked = pausePlaytime,
+                onCheckedChange = { pausePlaytime = !pausePlaytime }
+            )
+
+            SettingsEntry(
+                title = stringResource(R.string.reset_blacklist),
+                text = if (blacklistLength > 0) pluralStringResource(
+                    R.plurals.format_reset_blacklist_description,
+                    blacklistLength,
+                    blacklistLength
+                ) else stringResource(R.string.blacklist_empty),
+                isEnabled = blacklistLength > 0,
+                onClick = viewModel::resetBlacklist
+            )
+        }
+        SettingsGroup(
+            title = stringResource(R.string.backup),
+            description = stringResource(R.string.backup_description)
+        ) {
+            val backupFolderSummary = autoDatabaseBackupTreeUri
+                .takeIf(String::isNotBlank)
+                ?.let { Uri.parse(it).lastPathSegment }
+                ?: folderNotSelected
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.auto_backup),
+                text = stringResource(R.string.auto_backup_description),
+                isChecked = autoDatabaseBackupEnabled,
+                isEnabled = autoDatabaseBackupTreeUri.isNotBlank() || autoDatabaseBackupEnabled,
+                onCheckedChange = {
+                    if (autoDatabaseBackupEnabled) {
+                        autoDatabaseBackupEnabled = false
+                        DatabaseAutoBackupWorker.upsert(
+                            context = context.applicationContext,
+                            enabled = false,
+                            treeUri = autoDatabaseBackupTreeUri
+                        )
+                    } else {
+                        autoDatabaseBackupEnabled = true
+                        DatabaseAutoBackupWorker.upsert(
+                            context = context.applicationContext,
+                            enabled = true,
+                            treeUri = autoDatabaseBackupTreeUri
+                        )
+                    }
+                }
+            )
+
+            SettingsEntry(
+                title = stringResource(R.string.backup_folder),
+                text = backupFolderSummary,
+                onClick = {
+                    try {
+                        autoBackupFolderLauncher.launch(null)
+                    } catch (_: ActivityNotFoundException) {
+                        context.toast(noFileChooserInstalled)
+                    }
+                }
+            )
+
+            SettingsEntry(
+                title = stringResource(R.string.backup),
+                text = stringResource(R.string.backup_action_description),
+                onClick = {
+                    val dateFormat = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault())
+
+                    try {
+                        backupLauncher.launch("a1swaara_backup_${dateFormat.format(Date())}.db")
+                    } catch (e: ActivityNotFoundException) {
+                        context.toast(noFileChooserInstalled)
+                    }
+                }
+            )
+        }
+        SettingsGroup(
+            title = stringResource(R.string.restore),
+            description = stringResource(R.string.restore_warning),
+            important = true
+        ) {
+            SettingsEntry(
+                title = stringResource(R.string.restore),
+                text = stringResource(R.string.restore_description),
+                onClick = {
+                    try {
+                        restoreLauncher.launch(
+                            arrayOf(
+                                "application/vnd.sqlite3",
+                                "application/x-sqlite3",
+                                "application/octet-stream"
+                            )
+                        )
+                    } catch (e: ActivityNotFoundException) {
+                        context.toast(noFileChooserInstalled)
+                    }
+                }
+            )
+        }
+    }
+}

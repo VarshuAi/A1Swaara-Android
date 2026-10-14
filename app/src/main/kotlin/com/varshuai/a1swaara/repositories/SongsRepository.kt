@@ -1,0 +1,102 @@
+package com.varshuai.a1swaara.repositories
+
+import com.varshuai.a1swaara.Database
+import com.varshuai.a1swaara.models.Song
+import com.varshuai.a1swaara.transaction
+import app.a1swaara.core.data.enums.SongSortBy
+import app.a1swaara.core.data.enums.SortOrder
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+
+interface SongsRepository {
+    fun pagedSongs(
+        sortBy: SongSortBy,
+        sortOrder: SortOrder,
+        isLocal: Boolean = false,
+        onlyPlayed: Boolean = false,
+        excludeZeroDuration: Boolean = false,
+        searchQuery: String? = null
+    ): Flow<PagingData<Song>>
+
+    suspend fun songs(
+        sortBy: SongSortBy,
+        sortOrder: SortOrder,
+        isLocal: Boolean = false,
+        onlyPlayed: Boolean = false,
+        excludeZeroDuration: Boolean = false,
+        searchQuery: String? = null
+    ): List<Song>
+
+    fun deleteSong(song: Song)
+
+    fun upsertSongs(songs: List<Song>)
+}
+
+object DatabaseSongsRepository : SongsRepository {
+    override fun pagedSongs(
+        sortBy: SongSortBy,
+        sortOrder: SortOrder,
+        isLocal: Boolean,
+        onlyPlayed: Boolean,
+        excludeZeroDuration: Boolean,
+        searchQuery: String?
+    ): Flow<PagingData<Song>> = Pager(
+        config = PagingConfig(pageSize = 50, enablePlaceholders = false)
+    ) {
+        searchQuery?.takeIf(String::isNotBlank)?.let { query ->
+            Database.search(
+                query = query.toFtsPrefixQuery(),
+                isLocal = isLocal,
+                onlyPlayed = onlyPlayed,
+                excludeZeroDuration = excludeZeroDuration
+            )
+        } ?: Database.pagedSongs(
+            sortBy = sortBy,
+            sortOrder = sortOrder,
+            isLocal = isLocal,
+            onlyPlayed = onlyPlayed,
+            excludeZeroDuration = excludeZeroDuration
+        )
+    }.flow
+
+    override suspend fun songs(
+        sortBy: SongSortBy,
+        sortOrder: SortOrder,
+        isLocal: Boolean,
+        onlyPlayed: Boolean,
+        excludeZeroDuration: Boolean,
+        searchQuery: String?
+    ): List<Song> = searchQuery?.takeIf(String::isNotBlank)?.let { query ->
+        Database.searchSongs(
+            query = query.toFtsPrefixQuery(),
+            isLocal = isLocal,
+            onlyPlayed = onlyPlayed,
+            excludeZeroDuration = excludeZeroDuration
+        )
+    } ?: Database.songs(sortBy, sortOrder, isLocal).first().filter { song ->
+            (!onlyPlayed || song.totalPlayTimeMs > 0L) &&
+                    (!excludeZeroDuration || song.durationText != "0:00")
+        }
+
+    override fun deleteSong(song: Song) {
+        transaction { Database.delete(song) }
+    }
+
+    override fun upsertSongs(songs: List<Song>) {
+        transaction { songs.forEach(Database::insert) }
+    }
+}
+
+fun String.toFtsPrefixQuery(): String {
+    val tokens = trim()
+        .split(Regex("\\s+"))
+        .map { token -> token.filter { it != '"' } }
+        .filter(String::isNotBlank)
+
+    if (tokens.isEmpty()) return ""
+
+    return tokens.joinToString(" AND ") { "\"$it\"*" }
+}

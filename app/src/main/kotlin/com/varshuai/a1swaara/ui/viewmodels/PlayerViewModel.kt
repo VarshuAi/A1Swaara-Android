@@ -1,0 +1,33 @@
+package com.varshuai.a1swaara.ui.viewmodels
+
+import androidx.lifecycle.ViewModel
+import androidx.media3.common.MediaItem
+import com.varshuai.a1swaara.repositories.PlayerRepository
+
+class PlayerViewModel(
+    private val repository: PlayerRepository
+) : ViewModel() {
+    fun insertSong(mediaItem: MediaItem) = repository.insertSong(mediaItem)
+
+    fun observeLikedAt(songId: String) = repository.observeLikedAt(songId)
+
+    fun setLikedAt(songId: String, likedAt: Long?) = repository.setLikedAt(songId = songId, likedAt = likedAt)
+
+    fun observeLoudnessDb(songId: String) = repository.observeLoudnessDb(songId)
+
+    fun observeFormat(songId: String) = repository.observeFormat(songId)
+
+    suspend fun refreshFormat(songId: String, mediaItem: MediaItem?) =
+        repository.refreshFormat(songId = songId, mediaItem = mediaItem)
+
+    fun observeLoudnessBoost(songId: String) = repository.observeLoudnessBoost(songId)
+
+    fun setLoudnessBoost(songId: String, loudnessBoost: Float?) =
+        repository.setLoudnessBoost(songId = songId, loudnessBoost = loudnessBoost)
+
+    companion object {
+        fun factory(repository: PlayerRepository) = viewModelFactory {
+            PlayerViewModel(repository = repository)
+        }
+    }
+}

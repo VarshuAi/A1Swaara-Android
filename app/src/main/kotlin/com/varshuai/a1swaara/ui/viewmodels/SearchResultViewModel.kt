@@ -1,0 +1,34 @@
+package com.varshuai.a1swaara.ui.viewmodels
+
+import androidx.lifecycle.ViewModel
+import com.varshuai.a1swaara.repositories.SearchResultRepository
+import app.a1swaara.providers.youtubemusic.innertube.YoutubeMusicInnertube
+
+class SearchResultViewModel(
+    private val query: String,
+    private val repository: SearchResultRepository
+) : ViewModel() {
+    suspend fun songsPage(continuation: String?) =
+        repository.searchSongs(query = query, continuation = continuation)
+
+    suspend fun albumsPage(continuation: String?) =
+        repository.searchAlbums(query = query, continuation = continuation)
+
+    suspend fun artistsPage(continuation: String?) =
+        repository.searchArtists(query = query, continuation = continuation)
+
+    suspend fun videosPage(continuation: String?) =
+        repository.searchVideos(query = query, continuation = continuation)
+
+    suspend fun playlistsPage(continuation: String?) =
+        repository.searchPlaylists(query = query, continuation = continuation)
+
+    companion object {
+        fun factory(
+            query: String,
+            repository: SearchResultRepository
+        ) = viewModelFactory {
+            SearchResultViewModel(query = query, repository = repository)
+        }
+    }
+}
