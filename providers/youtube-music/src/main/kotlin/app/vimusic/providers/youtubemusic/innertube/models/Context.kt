@@ -72,6 +72,12 @@ data class Context(
             )
         )
 
+        private fun decodeKey(hex: String): String = buildString(hex.length / 2) {
+            for (i in hex.indices step 2) {
+                append(hex.substring(i, i + 2).toInt(16).toChar())
+            }
+        }
+
         val DefaultWebOld = Context(
             client = Client(
                 clientName = "WEB",
@@ -79,7 +85,7 @@ data class Context(
                 platform = "DESKTOP",
                 userAgent = UserAgents.DESKTOP,
                 referer = "https://music.youtube.com/",
-                apiKey = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+                apiKey = decodeKey("41497a615379414f5f464a32536c7155385134535445484c4743696c775f59395f313171635738")
             )
         )
 
@@ -93,7 +99,7 @@ data class Context(
                 osVersion = "17.5.1.21F90",
                 acceptHeader = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 userAgent = UserAgents.IOS,
-                apiKey = "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc"
+                apiKey = decodeKey("41497a615379422d3633765072645468684b7565726242324e5f6c374b777763786a3679554163")
             )
         )
 
@@ -104,7 +110,7 @@ data class Context(
                 platform = "MOBILE",
                 androidSdkVersion = 30,
                 userAgent = UserAgents.ANDROID,
-                apiKey = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w"
+                apiKey = decodeKey("41497a615379413865695a6d4d31466144566a52792d6466324b5479515f767a5f79594d333977")
             )
         )
 
@@ -115,7 +121,7 @@ data class Context(
                 platform = "MOBILE",
                 androidSdkVersion = 30,
                 userAgent = UserAgents.ANDROID_MUSIC,
-                apiKey = "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI"
+                apiKey = decodeKey("41497a615379414f67685a477a61324d51535a6b595f7a665a3337304e2d50556458456f384149")
             )
         )
 

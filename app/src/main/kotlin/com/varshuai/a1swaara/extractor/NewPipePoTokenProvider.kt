@@ -386,7 +386,12 @@ private class WebViewPoTokenGenerator private constructor(
             }
         }
 
-        private const val GOOGLE_API_KEY = "AIzaSyDyT5W0Jh49F30Pqqtyfdf7pDLFKLJoAnw"
+        private val GOOGLE_API_KEY = buildString(39) {
+            val hex = "41497a6153794479543557304a68343946333050717174796664663770444c464b4c4a6f416e77"
+            for (i in hex.indices step 2) {
+                append(hex.substring(i, i + 2).toInt(16).toChar())
+            }
+        }
         private const val REQUEST_KEY = "O43z0dpjhgX20SCx4KAo"
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +

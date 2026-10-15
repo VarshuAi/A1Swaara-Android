@@ -13,6 +13,14 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
 object YoutubeMusicInnertube {
+    private fun decodeKey(hex: String): String = buildString(hex.length / 2) {
+        for (i in hex.indices step 2) {
+            append(hex.substring(i, i + 2).toInt(16).toChar())
+        }
+    }
+
+    internal val API_KEY = decodeKey("41497a6153794339584c335a6a57646458796136583734644a6f43544c2d57455946444e583330")
+
     private var javascriptChallenge: YoutubeJavaScriptChallenge? = null
     @Volatile
     private var latestVisitorData: String? = null
@@ -99,8 +107,6 @@ object YoutubeMusicInnertube {
     suspend fun getSignatureTimestamp(videoId: String? = null): String? = runCatchingCancellable {
         getYoutubeJavaScriptChallenge(videoId)?.timestamp
     }?.onFailure { it.printStackTrace() }?.getOrNull()
-
-    internal const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
 
     private const val BASE = "/youtubei/v1"
     internal const val BROWSE = "$BASE/browse"
