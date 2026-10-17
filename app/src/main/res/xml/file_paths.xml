@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="shared_stories" path="stories/" />
+    <cache-path name="shared_images" path="images/" />
+    <cache-path name="apk_updates" path="updates/" />
+    <external-cache-path name="external_stories" path="stories/" />
+    <external-cache-path name="external_apk_updates" path="updates/" />
+    <external-files-path name="external_files" path="." />
+</paths>

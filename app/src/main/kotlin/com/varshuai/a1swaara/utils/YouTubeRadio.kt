@@ -1,0 +1,90 @@
+package com.varshuai.a1swaara.utils
+
+import android.util.Log
+import androidx.media3.common.MediaItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+data class YouTubeRadioPage(
+    val items: List<MediaItem>,
+    val continuation: String?,
+    val playlistId: String?,
+    val params: String?,
+    val playlistSetVideoId: String?
+)
+
+data class YouTubeRadioState(
+    val videoId: String?,
+    val playlistId: String?,
+    val playlistSetVideoId: String?,
+    val params: String?,
+    val continuation: String?
+)
+
+interface YouTubeRadioDataSource {
+    suspend fun fetchFirstPage(
+        videoId: String?,
+        playlistId: String?,
+        playlistSetVideoId: String?,
+        params: String?
+    ): YouTubeRadioPage?
+
+    suspend fun fetchContinuation(continuation: String): YouTubeRadioPage?
+}
+
+data class YouTubeRadio(
+    private val videoId: String? = null,
+    private var playlistId: String? = null,
+    private var playlistSetVideoId: String? = null,
+    private var parameters: String? = null,
+    private var nextContinuation: String? = null,
+    private val dataSource: YouTubeRadioDataSource
+) {
+    private companion object {
+        private const val TAG = "YouTubeRadio"
+    }
+
+    fun snapshot() = YouTubeRadioState(
+        videoId = videoId,
+        playlistId = playlistId,
+        playlistSetVideoId = playlistSetVideoId,
+        params = parameters,
+        continuation = nextContinuation
+    )
+
+    suspend fun process(): List<MediaItem> {
+        return runCatching {
+            var mediaItems: List<MediaItem>? = null
+
+            nextContinuation = withContext(Dispatchers.IO) {
+                val continuation = nextContinuation
+
+                val page = if (continuation == null) {
+                    dataSource.fetchFirstPage(
+                        videoId = videoId,
+                        playlistId = playlistId,
+                        playlistSetVideoId = playlistSetVideoId,
+                        params = parameters
+                    )?.also { firstPage ->
+                        playlistId = firstPage.playlistId ?: playlistId
+                        parameters = firstPage.params ?: parameters
+                        playlistSetVideoId = firstPage.playlistSetVideoId ?: playlistSetVideoId
+                    }
+                } else {
+                    dataSource.fetchContinuation(continuation)
+                }
+
+                page?.let {
+                    mediaItems = it.items
+                    it.continuation?.takeUnless { nextContinuation == it }
+                }
+            }
+
+            mediaItems ?: emptyList()
+        }.getOrElse { error ->
+            Log.e(TAG, "Radio fetch failed", error)
+            nextContinuation = null
+            emptyList()
+        }
+    }
+}

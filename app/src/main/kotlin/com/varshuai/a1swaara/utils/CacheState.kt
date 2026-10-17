@@ -1,0 +1,203 @@
+package com.varshuai.a1swaara.utils
+
+import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.TransferListener
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.FileDataSource
+import com.varshuai.a1swaara.Database
+import com.varshuai.a1swaara.LocalPlayerServiceBinder
+import com.varshuai.a1swaara.R
+import com.varshuai.a1swaara.models.Format
+import com.varshuai.a1swaara.service.LOCAL_KEY_PREFIX
+import com.varshuai.a1swaara.service.PlayerService
+import com.varshuai.a1swaara.service.PrecacheService
+import com.varshuai.a1swaara.service.downloadState
+import com.varshuai.a1swaara.ui.components.themed.CircularProgressIndicator
+import com.varshuai.a1swaara.ui.components.themed.HeaderIconButton
+import com.varshuai.a1swaara.ui.components.themed.PrimaryButton
+import app.a1swaara.core.ui.LocalAppearance
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.coroutines.flow.distinctUntilChanged
+import java.io.FileNotFoundException
+
+@Composable
+fun PlaylistDownloadIcon(
+    songs: ImmutableList<MediaItem>,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val (colorPalette) = LocalAppearance.current
+
+    val isDownloading by downloadState.collectAsStateWithLifecycle()
+    val uncachedSongs = uncachedMediaItems(songs, isDownloading)
+
+    AnimatedContent(
+        targetState = isDownloading,
+        label = "",
+        transitionSpec = { fadeIn() togetherWith fadeOut() }
+    ) { currentIsDownloading ->
+        when {
+            currentIsDownloading -> CircularProgressIndicator(modifier = Modifier.size(18.dp))
+
+            uncachedSongs.isNotEmpty() -> HeaderIconButton(
+                icon = R.drawable.download,
+                color = colorPalette.text,
+                onClick = {
+                    PrecacheService.scheduleCache(context.applicationContext, uncachedSongs)
+                },
+                modifier = modifier
+            )
+        }
+    }
+}
+
+@Composable
+fun RowScope.PlaylistDownloadFloatingButton(songs: ImmutableList<MediaItem>) {
+    val context = LocalContext.current
+    val isDownloading by downloadState.collectAsStateWithLifecycle()
+    val uncachedSongs = uncachedMediaItems(songs, isDownloading)
+
+    if (!isDownloading && uncachedSongs.isNotEmpty()) PrimaryButton(
+        icon = R.drawable.download,
+        onClick = {
+            PrecacheService.scheduleCache(context.applicationContext, uncachedSongs)
+        }
+    )
+}
+
+@Composable
+private fun uncachedMediaItems(
+    songs: ImmutableList<MediaItem>,
+    cacheStateKey: Any?,
+): List<MediaItem> {
+    val uncached = ArrayList<MediaItem>(songs.size)
+    songs.forEach { song ->
+        if (!isCached(mediaId = song.mediaId, key = cacheStateKey)) uncached += song
+    }
+    return uncached
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+fun isCached(
+    mediaId: String,
+    key: Any? = Unit,
+    binder: PlayerService.Binder? = LocalPlayerServiceBinder.current
+): Boolean {
+    if (mediaId.startsWith(LOCAL_KEY_PREFIX)) return true
+
+    var format: Format? by remember { mutableStateOf(null) }
+
+    LaunchedEffect(mediaId, key) {
+        Database
+            .format(mediaId)
+            .distinctUntilChanged()
+            .collect { format = it }
+    }
+
+    return remember(mediaId, binder, format, key) {
+        format?.contentLength?.let { len ->
+            binder?.cache?.isCached(mediaId, 0, len)
+        } ?: false
+    }
+}
+
+@OptIn(UnstableApi::class)
+class ConditionalCacheDataSourceFactory(
+    private val cacheDataSourceFactory: CacheDataSource.Factory,
+    private val upstreamDataSourceFactory: DataSource.Factory,
+    private val shouldCache: (DataSpec) -> Boolean
+) : DataSource.Factory {
+    init {
+        cacheDataSourceFactory.setUpstreamDataSourceFactory(upstreamDataSourceFactory)
+    }
+
+    override fun createDataSource() = object : DataSource {
+        private var selectedFactory: DataSource.Factory = upstreamDataSourceFactory
+        private val transferListeners = mutableListOf<TransferListener>()
+        private var source: DataSource? = null
+
+        private fun createSource(factory: DataSource.Factory) = factory.createDataSource().apply {
+            transferListeners.forEach { addTransferListener(it) }
+        }
+
+        private fun replaceSource(factory: DataSource.Factory) {
+            // A failed CacheDataSource or ranged reopen can still own an
+            // upstream HTTP/3 call. Close it before publishing its replacement
+            // so an abandoned stream cannot keep native resources or a cache
+            // hole lock alive.
+            runCatching { source?.close() }
+            selectedFactory = factory
+            source = createSource(factory)
+        }
+
+        private fun currentSource(): DataSource = source ?: createSource(selectedFactory).also { source = it }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int = runCatching {
+            currentSource().read(buffer, offset, length)
+        }.getOrElse { error ->
+            if (
+                selectedFactory === cacheDataSourceFactory &&
+                (error is FileDataSource.FileDataSourceException ||
+                        error.findCause<FileNotFoundException>() != null)
+            ) {
+                // Cache file disappeared; fall back to upstream and retry once.
+                replaceSource(upstreamDataSourceFactory)
+                currentSource().read(buffer, offset, length)
+            } else {
+                throw error
+            }
+        }
+
+        override fun addTransferListener(transferListener: TransferListener) {
+            source?.addTransferListener(transferListener)
+            transferListeners += transferListener
+        }
+
+        override fun open(dataSpec: DataSpec): Long {
+            val factory =
+                if (shouldCache(dataSpec)) cacheDataSourceFactory else upstreamDataSourceFactory
+            replaceSource(factory)
+
+            return runCatching {
+                currentSource().open(dataSpec)
+            }.getOrElse {
+                if (
+                    it is ReadOnlyException ||
+                    it.findCause<ReadOnlyException>() != null ||
+                    it is FileDataSource.FileDataSourceException ||
+                    it.findCause<FileNotFoundException>() != null
+                ) {
+                    replaceSource(upstreamDataSourceFactory)
+                    currentSource().open(dataSpec)
+                } else throw it
+            }
+        }
+
+        override fun getUri() = source?.uri
+        override fun close() {
+            source?.close()
+            source = null
+        }
+    }
+}

@@ -1,0 +1,231 @@
+package com.varshuai.a1swaara.ui.screens.builtinplaylist
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.varshuai.a1swaara.LocalAppContainer
+import com.varshuai.a1swaara.LocalPlayerAwareWindowInsets
+import com.varshuai.a1swaara.LocalPlayerServiceBinder
+import com.varshuai.a1swaara.R
+import com.varshuai.a1swaara.models.Song
+import com.varshuai.a1swaara.preferences.DataPreferences
+import com.varshuai.a1swaara.ui.components.LocalMenuState
+import com.varshuai.a1swaara.ui.components.themed.FloatingActionsContainerWithScrollToTop
+import com.varshuai.a1swaara.ui.components.themed.Header
+import com.varshuai.a1swaara.ui.components.themed.HideSongDialog
+import com.varshuai.a1swaara.ui.components.themed.InHistoryMediaItemMenu
+import com.varshuai.a1swaara.ui.components.themed.NonQueuedMediaItemMenu
+import com.varshuai.a1swaara.ui.components.themed.PrimaryButton
+import com.varshuai.a1swaara.ui.components.themed.SecondaryTextButton
+import com.varshuai.a1swaara.ui.components.themed.SongListActionsRow
+import com.varshuai.a1swaara.ui.components.themed.ValueSelectorDialog
+import com.varshuai.a1swaara.ui.components.themed.matchesSongCollectionQuery
+import com.varshuai.a1swaara.ui.items.SongItem
+import com.varshuai.a1swaara.ui.items.SongTotalPlayTimeOverlay
+import com.varshuai.a1swaara.ui.modifiers.songSwipeActions
+import com.varshuai.a1swaara.ui.screens.home.HeaderSongSortBy
+import com.varshuai.a1swaara.ui.viewmodels.BuiltInPlaylistSongsViewModel
+import com.varshuai.a1swaara.utils.LocalPlaybackActions
+import com.varshuai.a1swaara.utils.PlaylistDownloadFloatingButton
+import com.varshuai.a1swaara.utils.asMediaItem
+import com.varshuai.a1swaara.utils.rememberMediaItems
+import app.a1swaara.compose.persist.persistList
+import app.a1swaara.core.data.enums.BuiltInPlaylist
+import app.a1swaara.core.data.enums.SongSortBy
+import app.a1swaara.core.data.enums.SortOrder
+import app.a1swaara.core.ui.Dimensions
+import app.a1swaara.core.ui.LocalAppearance
+import app.a1swaara.core.ui.utils.enumSaver
+import kotlinx.collections.immutable.toImmutableList
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun BuiltInPlaylistSongs(
+    builtInPlaylist: BuiltInPlaylist,
+    modifier: Modifier = Modifier
+) = with(DataPreferences) {
+    val viewModel: BuiltInPlaylistSongsViewModel = viewModel(
+        factory = BuiltInPlaylistSongsViewModel.factory(LocalAppContainer.current.builtInPlaylistRepository)
+    )
+    val (colorPalette) = LocalAppearance.current
+    val binder = LocalPlayerServiceBinder.current
+    val menuState = LocalMenuState.current
+    val playbackActions = LocalPlaybackActions.current
+
+    var songs by persistList<Song>("${builtInPlaylist.name}/songs")
+    var hidingSong by rememberSaveable { mutableStateOf<String?>(null) }
+    var filterQuery by rememberSaveable { mutableStateOf<String?>(null) }
+    val displayedSongs = songs.filter {
+        matchesSongCollectionQuery(filterQuery, it.title, it.artistsText)
+    }
+    val mediaItems = rememberMediaItems(displayedSongs)
+
+    var sortBy by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SongSortBy.DateAdded) }
+    var sortOrder by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SortOrder.Descending) }
+
+    LaunchedEffect(binder, sortBy, sortOrder) {
+        viewModel.observeSongs(
+            builtInPlaylist = builtInPlaylist,
+            sortBy = sortBy,
+            sortOrder = sortOrder,
+            topPeriodMillis = topListPeriod.duration?.inWholeMilliseconds,
+            topLength = topListLength,
+            isOfflineCached = { song -> binder?.isCached(song) ?: false }
+        ).collect { songs = it.toImmutableList() }
+    }
+
+    val lazyListState = rememberLazyListState()
+
+    Box(modifier = modifier) {
+        LazyColumn(
+            state = lazyListState,
+            contentPadding = LocalPlayerAwareWindowInsets.current
+                .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
+                .asPaddingValues(),
+            modifier = Modifier
+                .background(colorPalette.background0)
+                .fillMaxSize()
+        ) {
+            item(
+                key = "header",
+                contentType = 0
+            ) {
+                Header(
+                    title = when (builtInPlaylist) {
+                        BuiltInPlaylist.Favorites -> stringResource(R.string.favorites)
+                        BuiltInPlaylist.Offline -> stringResource(R.string.offline)
+                        BuiltInPlaylist.Top -> stringResource(
+                            R.string.format_my_top_playlist,
+                            topListLength
+                        )
+
+                        BuiltInPlaylist.History -> stringResource(R.string.history)
+                    },
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    SongListActionsRow(
+                        filterQuery = filterQuery,
+                        onFilterQueryChange = { filterQuery = it },
+                        trailingContent = {
+                            if (builtInPlaylist.sortable) HeaderSongSortBy(
+                                sortBy = sortBy,
+                                setSortBy = { sortBy = it },
+                                sortOrder = sortOrder,
+                                setSortOrder = { sortOrder = it }
+                            )
+
+                            if (builtInPlaylist == BuiltInPlaylist.Top) {
+                                var dialogShowing by rememberSaveable { mutableStateOf(false) }
+
+                                SecondaryTextButton(
+                                    text = topListPeriod.displayName(),
+                                    onClick = { dialogShowing = true }
+                                )
+
+                                if (dialogShowing) ValueSelectorDialog(
+                                    onDismiss = { dialogShowing = false },
+                                    title = stringResource(
+                                        R.string.format_view_top_of_header,
+                                        topListLength
+                                    ),
+                                    selectedValue = topListPeriod,
+                                    values = DataPreferences.TopListPeriod.entries.toImmutableList(),
+                                    onValueSelect = { topListPeriod = it },
+                                    valueText = { it.displayName() }
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+
+            itemsIndexed(
+                items = displayedSongs,
+                key = { _, song -> song.id },
+                contentType = { _, song -> song }
+            ) { index, song ->
+                if (hidingSong == song.id) HideSongDialog(
+                    song = song,
+                    onDismiss = { hidingSong = null },
+                    onConfirm = { hidingSong = null }
+                )
+
+                SongItem(
+                    modifier = Modifier
+                        .combinedClickable(
+                            onLongClick = {
+                                menuState.display {
+                                    when (builtInPlaylist) {
+                                        BuiltInPlaylist.Offline -> InHistoryMediaItemMenu(
+                                            song = song,
+                                            onDismiss = menuState::hide
+                                        )
+
+                                        BuiltInPlaylist.Favorites,
+                                        BuiltInPlaylist.Top,
+                                        BuiltInPlaylist.History -> NonQueuedMediaItemMenu(
+                                            mediaItem = song.asMediaItem,
+                                            onDismiss = menuState::hide
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                playbackActions.playAtIndex(mediaItems, index)
+                            }
+                        )
+                        .songSwipeActions(
+                            key = displayedSongs,
+                            mediaItem = song.asMediaItem,
+                            songToHide = song,
+                            onSwipeLeftRequested = { hidingSong = it.id }
+                        )
+                        .animateItem(),
+                    song = song,
+                    index = if (builtInPlaylist == BuiltInPlaylist.Top) index else null,
+                    thumbnailSize = Dimensions.thumbnails.song,
+                    onThumbnailContent = if (sortBy == SongSortBy.PlayTime) {
+                        { SongTotalPlayTimeOverlay(song.totalPlayTimeMs) }
+                    } else null
+                )
+            }
+        }
+
+        FloatingActionsContainerWithScrollToTop(
+            lazyListState = lazyListState,
+            icon = R.drawable.shuffle,
+            actionsContent = {
+                if (builtInPlaylist != BuiltInPlaylist.Offline) {
+                    PlaylistDownloadFloatingButton(mediaItems.toImmutableList())
+                }
+                PrimaryButton(
+                    icon = R.drawable.enqueue,
+                    onClick = { playbackActions.enqueue(mediaItems) }
+                )
+            },
+            onClick = {
+                playbackActions.shufflePlay(mediaItems)
+            }
+        )
+    }
+}

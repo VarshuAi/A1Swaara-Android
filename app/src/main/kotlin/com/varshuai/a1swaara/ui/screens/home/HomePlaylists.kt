@@ -1,0 +1,275 @@
+package com.varshuai.a1swaara.ui.screens.home
+
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.varshuai.a1swaara.LocalAppContainer
+import com.varshuai.a1swaara.LocalPlayerAwareWindowInsets
+import com.varshuai.a1swaara.R
+import com.varshuai.a1swaara.models.PipedSession
+import com.varshuai.a1swaara.models.Playlist
+import com.varshuai.a1swaara.models.PlaylistPreview
+import com.varshuai.a1swaara.preferences.DataPreferences
+import com.varshuai.a1swaara.preferences.OrderPreferences
+import com.varshuai.a1swaara.ui.components.themed.FloatingActionsContainerWithScrollToTop
+import com.varshuai.a1swaara.ui.components.themed.Header
+import com.varshuai.a1swaara.ui.components.themed.HeaderIconButton
+import com.varshuai.a1swaara.ui.components.themed.ImportPlaylistDialog
+import com.varshuai.a1swaara.ui.components.themed.SecondaryTextButton
+import com.varshuai.a1swaara.ui.components.themed.TextFieldDialog
+import com.varshuai.a1swaara.ui.items.PlaylistItem
+import com.varshuai.a1swaara.ui.screens.Route
+import com.varshuai.a1swaara.ui.screens.settings.SettingsEntryGroupText
+import com.varshuai.a1swaara.ui.screens.settings.SettingsGroupSpacer
+import com.varshuai.a1swaara.ui.viewmodels.HomePlaylistsViewModel
+import app.a1swaara.compose.persist.persist
+import app.a1swaara.compose.persist.persistList
+import app.a1swaara.core.data.enums.BuiltInPlaylist
+import app.a1swaara.core.data.enums.PlaylistSortBy
+import app.a1swaara.core.data.enums.SortOrder
+import app.a1swaara.core.ui.Dimensions
+import app.a1swaara.core.ui.LocalAppearance
+import app.a1swaara.providers.piped.models.Session
+import kotlinx.collections.immutable.toImmutableList
+import app.a1swaara.providers.piped.models.PlaylistPreview as PipedPlaylistPreview
+
+@Route
+@Composable
+fun HomePlaylists(
+    onBuiltInPlaylist: (BuiltInPlaylist) -> Unit,
+    onPlaylistClick: (Playlist) -> Unit,
+    onPipedPlaylistClick: (Session, PipedPlaylistPreview) -> Unit,
+    onSearchClick: () -> Unit
+) = with(OrderPreferences) {
+    val viewModel: HomePlaylistsViewModel = viewModel(
+        factory = HomePlaylistsViewModel.factory(LocalAppContainer.current.homeRepository)
+    )
+    val (colorPalette) = LocalAppearance.current
+
+    var isCreatingANewPlaylist by rememberSaveable { mutableStateOf(false) }
+    var isImportingPlaylist by rememberSaveable { mutableStateOf(false) }
+
+    if (isCreatingANewPlaylist) TextFieldDialog(
+        hintText = stringResource(R.string.enter_playlist_name_prompt),
+        onDismiss = { isCreatingANewPlaylist = false },
+        onAccept = viewModel::createPlaylist
+    )
+
+    if (isImportingPlaylist) ImportPlaylistDialog(
+        onDismiss = { isImportingPlaylist = false }
+    )
+    var items by persistList<PlaylistPreview>("home/playlists")
+    var pipedSessions by persist<Map<PipedSession, List<PipedPlaylistPreview>?>>("home/piped")
+
+    LaunchedEffect(playlistSortBy, playlistSortOrder) {
+        viewModel
+            .observePlaylistPreviews(playlistSortBy, playlistSortOrder)
+            .collect { items = it.toImmutableList() }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.observePipedPlaylists().collect { pipedSessions = it }
+    }
+
+    val sortOrderIconRotation by animateFloatAsState(
+        targetValue = if (playlistSortOrder == SortOrder.Ascending) 0f else 180f,
+        animationSpec = tween(durationMillis = 400, easing = LinearEasing),
+        label = ""
+    )
+
+    val lazyGridState = rememberLazyGridState()
+
+    Box {
+        LazyVerticalGrid(
+            state = lazyGridState,
+            columns = GridCells.Adaptive(Dimensions.thumbnails.song * 2 + Dimensions.items.verticalPadding * 2),
+            contentPadding = LocalPlayerAwareWindowInsets.current
+                .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
+                .asPaddingValues(),
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorPalette.background0)
+        ) {
+            item(key = "header", contentType = 0, span = { GridItemSpan(maxLineSpan) }) {
+                Header(title = stringResource(R.string.playlists)) {
+                    SecondaryTextButton(
+                        text = stringResource(R.string.new_playlist),
+                        onClick = { isCreatingANewPlaylist = true }
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    SecondaryTextButton(
+                        text = stringResource(R.string.import_playlist),
+                        onClick = { isImportingPlaylist = true }
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    HeaderIconButton(
+                        icon = R.drawable.medical,
+                        enabled = playlistSortBy == PlaylistSortBy.SongCount,
+                        onClick = { playlistSortBy = PlaylistSortBy.SongCount }
+                    )
+
+                    HeaderIconButton(
+                        icon = R.drawable.text,
+                        enabled = playlistSortBy == PlaylistSortBy.Name,
+                        onClick = { playlistSortBy = PlaylistSortBy.Name }
+                    )
+
+                    HeaderIconButton(
+                        icon = R.drawable.time,
+                        enabled = playlistSortBy == PlaylistSortBy.DateAdded,
+                        onClick = { playlistSortBy = PlaylistSortBy.DateAdded }
+                    )
+
+                    Spacer(modifier = Modifier.width(2.dp))
+
+                    HeaderIconButton(
+                        icon = R.drawable.arrow_up,
+                        color = colorPalette.text,
+                        onClick = { playlistSortOrder = !playlistSortOrder },
+                        modifier = Modifier.graphicsLayer { rotationZ = sortOrderIconRotation }
+                    )
+                }
+            }
+
+            item(key = "favorites") {
+                PlaylistItem(
+                    icon = R.drawable.heart,
+                    colorTint = colorPalette.red,
+                    name = stringResource(R.string.favorites),
+                    songCount = null,
+                    thumbnailSize = Dimensions.thumbnails.playlist,
+                    alternative = true,
+                    modifier = Modifier.clickable { onBuiltInPlaylist(BuiltInPlaylist.Favorites) }
+                )
+            }
+
+            item(key = "offline") {
+                PlaylistItem(
+                    icon = R.drawable.airplane,
+                    colorTint = colorPalette.blue,
+                    name = stringResource(R.string.offline),
+                    songCount = null,
+                    thumbnailSize = Dimensions.thumbnails.playlist,
+                    alternative = true,
+                    modifier = Modifier.clickable { onBuiltInPlaylist(BuiltInPlaylist.Offline) }
+                )
+            }
+
+            item(key = "top") {
+                PlaylistItem(
+                    icon = R.drawable.trending,
+                    colorTint = colorPalette.red,
+                    name = stringResource(
+                        R.string.format_my_top_playlist,
+                        DataPreferences.topListLength
+                    ),
+                    songCount = null,
+                    thumbnailSize = Dimensions.thumbnails.playlist,
+                    alternative = true,
+                    modifier = Modifier.clickable { onBuiltInPlaylist(BuiltInPlaylist.Top) }
+                )
+            }
+
+            item(key = "history") {
+                PlaylistItem(
+                    icon = R.drawable.history,
+                    colorTint = colorPalette.textDisabled,
+                    name = stringResource(R.string.history),
+                    songCount = null,
+                    thumbnailSize = Dimensions.thumbnails.playlist,
+                    alternative = true,
+                    modifier = Modifier.clickable { onBuiltInPlaylist(BuiltInPlaylist.History) }
+                )
+            }
+
+            items(
+                items = items,
+                key = { it.playlist.id }
+            ) { playlistPreview ->
+                PlaylistItem(
+                    playlist = playlistPreview,
+                    thumbnailSize = Dimensions.thumbnails.playlist,
+                    alternative = true,
+                    modifier = Modifier
+                        .clickable(onClick = { onPlaylistClick(playlistPreview.playlist) })
+                        .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                )
+            }
+
+            pipedSessions
+                ?.ifEmpty { null }
+                ?.filter { it.value?.isNotEmpty() == true }
+                ?.forEach { (session, playlists) ->
+                    item(
+                        key = "piped-header-${session.username}",
+                        contentType = 0,
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) {
+                        SettingsGroupSpacer()
+                        SettingsEntryGroupText(title = session.username)
+                    }
+
+                    playlists?.let {
+                        items(
+                            items = playlists,
+                            key = { "piped-${session.username}-${it.id}" }
+                        ) { playlist ->
+                            PlaylistItem(
+                                name = playlist.name,
+                                songCount = playlist.videoCount,
+                                channelName = null,
+                                thumbnailUrl = playlist.thumbnailUrl.toString(),
+                                thumbnailSize = Dimensions.thumbnails.playlist,
+                                alternative = true,
+                                modifier = Modifier
+                                    .clickable(onClick = {
+                                        onPipedPlaylistClick(
+                                            session.toApiSession(),
+                                            playlist
+                                        )
+                                    })
+                                    .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            )
+                        }
+                    }
+                }
+        }
+
+        FloatingActionsContainerWithScrollToTop(
+            lazyGridState = lazyGridState,
+            icon = R.drawable.search,
+            onClick = onSearchClick
+        )
+    }
+}

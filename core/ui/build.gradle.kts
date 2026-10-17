@@ -1,0 +1,37 @@
+plugins {
+    id("com.android.library")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.parcelize")
+}
+
+android {
+    namespace = "app.a1swaara.core.ui"
+    compileSdk = 37
+
+    defaultConfig {
+        minSdk = 23
+    }
+
+
+}
+
+dependencies {
+    implementation(projects.core.data)
+
+    implementation(libs.core.ktx)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.animation)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.shimmer)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.util)
+    implementation(libs.compose.ui.fonts)
+    implementation(libs.compose.material3)
+    implementation(libs.palette)
+
+}
+
+kotlin {
+    jvmToolchain(libs.versions.jvm.get().toInt())
+}

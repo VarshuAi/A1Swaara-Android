@@ -1,0 +1,5 @@
+sdk.dir=/home/youruser/.android-sdk
+
+# Optional Cloud & Community Sync Credentials
+# SWAARA_CLOUD_API_KEY=your_api_key_here
+# SWAARA_CLOUD_PROJECT_ID=your_project_id_here

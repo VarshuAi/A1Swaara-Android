@@ -1,0 +1,27 @@
+plugins {
+    id("com.android.library")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.parcelize")
+}
+
+android {
+    namespace = "app.a1swaara.compose.routing"
+    compileSdk = 37
+
+    defaultConfig {
+        minSdk = 23
+    }
+
+}
+
+kotlin {
+    jvmToolchain(libs.versions.jvm.get().toInt())
+}
+
+dependencies {
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.activity)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.animation)
+
+}

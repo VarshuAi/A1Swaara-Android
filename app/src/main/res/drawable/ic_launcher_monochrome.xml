@@ -1,0 +1,42 @@
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Ring -->
+    <path
+        android:pathData="M54,24 A30,30 0 1,0 54,84 A30,30 0 1,0 54,24 Z"
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFFFF" />
+
+    <!-- Center Note -->
+    <path
+        android:pathData="M48,34 L66,30 L66,58 A9,9 0 1,1 57,49 L57,38 L50,40 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Soundwave Bars -->
+    <path
+        android:pathData="M37,56 L37,66"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+
+    <path
+        android:pathData="M43,50 L43,68"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+
+    <path
+        android:pathData="M71,48 L71,68"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+
+    <path
+        android:pathData="M77,54 L77,66"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeColor="#FFFFFFFF" />
+</vector>
