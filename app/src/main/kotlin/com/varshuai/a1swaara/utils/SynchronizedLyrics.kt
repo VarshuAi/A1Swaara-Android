@@ -15,7 +15,7 @@ class SynchronizedLyrics(
     sentences: Map<Long, String>,
     private val positionProvider: () -> Long
 ) {
-    private val timestamps = sentences.keys.sorted().toLongArray()
+    val timestamps = sentences.keys.sorted().toLongArray()
     val sentences: ImmutableList<String> = timestamps.map(sentences::getValue).toImmutableList()
 
     var index by mutableIntStateOf(currentIndex)

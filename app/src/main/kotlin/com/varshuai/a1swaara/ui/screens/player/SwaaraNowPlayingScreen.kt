@@ -733,22 +733,24 @@ fun SwaaraNowPlayingScreen(
         ModalBottomSheet(
             onDismissRequest = { showQueueSheet = false },
             sheetState = sheetState,
-            containerColor = SwaaraDeepSurface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            containerColor = SwaaraObsidian,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 10.dp, bottom = 6.dp)
+                        .width(44.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.20f))
+                )
+            }
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "Play Queue",
-                    color = SwaaraPrimaryText,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
                 val timeline = player.currentTimeline
                 val queueSize = timeline.windowCount
                 val mediaItems = remember(queueSize, player.currentMediaItemIndex) {
@@ -757,63 +759,181 @@ fun SwaaraNowPlayingScreen(
                     }
                 }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().height(380.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                // Header with Track Count and Action Badges
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    itemsIndexed(mediaItems) { idx, item ->
-                        val isCurrent = idx == player.currentMediaItemIndex
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isCurrent) SwaaraElevatedSurface else Color.Transparent)
-                                .border(
-                                    1.dp,
-                                    if (isCurrent) SwaaraMagenta.copy(alpha = 0.40f) else Color.Transparent,
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable {
-                                    player.seekToDefaultPosition(idx)
-                                    player.play()
-                                    showQueueSheet = false
-                                }
-                                .padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AsyncImage(
-                                model = item.mediaMetadata.artworkUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = item.mediaMetadata.title?.toString() ?: "Track",
-                                    color = if (isCurrent) SwaaraMagenta else SwaaraPrimaryText,
-                                    fontSize = 13.5.sp,
-                                    fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = item.mediaMetadata.artist?.toString()?.replace(Regex("[,&\\s]{2,}"), ", ") ?: "Artist",
-                                    color = SwaaraSecondaryText,
-                                    fontSize = 11.5.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                    Column {
+                        Text(
+                            text = "Up Next • Play Queue",
+                            color = SwaaraPrimaryText,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.3.sp
+                        )
+                        Text(
+                            text = "$queueSize tracks scheduled",
+                            color = SwaaraSecondaryText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    // Shuffle Button
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SwaaraElevatedSurface)
+                            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+                            .clickable {
+                                player.shuffleModeEnabled = !player.shuffleModeEnabled
+                                context.toast(if (player.shuffleModeEnabled) "Queue shuffled" else "Shuffle off")
                             }
-                            if (isCurrent) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.volume_up),
-                                    contentDescription = "Playing",
-                                    tint = SwaaraMagenta,
-                                    modifier = Modifier.size(18.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.shuffle),
+                                contentDescription = "Shuffle",
+                                tint = if (player.shuffleModeEnabled) SwaaraCyan else SwaaraSecondaryText,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = if (player.shuffleModeEnabled) "Shuffled" else "Shuffle",
+                                color = if (player.shuffleModeEnabled) SwaaraCyan else SwaaraSecondaryText,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (mediaItems.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Queue is empty",
+                            color = SwaaraSecondaryText,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(420.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        itemsIndexed(mediaItems) { idx, item ->
+                            val isCurrent = idx == player.currentMediaItemIndex
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        if (isCurrent) SwaaraMagenta.copy(alpha = 0.15f)
+                                        else SwaaraDeepSurface
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isCurrent) SwaaraMagenta.copy(alpha = 0.45f)
+                                        else Color.White.copy(alpha = 0.06f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        player.seekToDefaultPosition(idx)
+                                        player.play()
+                                        showQueueSheet = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Track number or Playing indicator
+                                Box(
+                                    modifier = Modifier.size(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isCurrent) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.volume_up),
+                                            contentDescription = "Playing",
+                                            tint = SwaaraMagenta,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "${idx + 1}",
+                                            color = SwaaraSecondaryText,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                AsyncImage(
+                                    model = item.mediaMetadata.artworkUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(SwaaraElevatedSurface)
                                 )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.mediaMetadata.title?.toString() ?: "Track",
+                                        color = if (isCurrent) Color.White else SwaaraPrimaryText,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isCurrent) FontWeight.Black else FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = item.mediaMetadata.artist?.toString()?.replace(Regex("[,&\\s]{2,}"), ", ") ?: "Unknown Artist",
+                                        color = if (isCurrent) SwaaraCyan else SwaaraSecondaryText,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                if (!isCurrent) {
+                                    IconButton(
+                                        onClick = {
+                                            runCatching {
+                                                player.removeMediaItem(idx)
+                                                context.toast("Removed from queue")
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.close),
+                                            contentDescription = "Remove",
+                                            tint = SwaaraSecondaryText.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

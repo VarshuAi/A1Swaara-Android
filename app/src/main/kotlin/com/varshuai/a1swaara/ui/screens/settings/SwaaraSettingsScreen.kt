@@ -128,22 +128,108 @@ fun SwaaraSettingsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 14.dp)
             ) {
-                // Header
-                Text(
-                    text = "Settings",
-                    color = SwaaraPrimaryText,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.3).sp
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = "Playback, audio, appearance & app preferences",
-                    color = SwaaraSecondaryText,
-                    fontSize = 12.5.sp
-                )
+                // Header with Sovereign Badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Settings Studio",
+                            color = SwaaraPrimaryText,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = (-0.5).sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Acoustics, storage, visual identity & preferences",
+                            color = SwaaraSecondaryText,
+                            fontSize = 12.5.sp
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SwaaraMagenta.copy(alpha = 0.15f))
+                            .border(1.dp, SwaaraMagenta.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = "v1.0.9",
+                            color = SwaaraMagenta,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Hero System Card: High Fidelity Audio & Sovereign Engine
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    SwaaraMagenta.copy(alpha = 0.20f),
+                                    SwaaraViolet.copy(alpha = 0.12f),
+                                    SwaaraDeepSurface
+                                )
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            Brush.linearGradient(listOf(SwaaraMagenta.copy(alpha = 0.45f), SwaaraCyan.copy(alpha = 0.25f))),
+                            RoundedCornerShape(22.dp)
+                        )
+                        .padding(18.dp)
+                ) {
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(SwaaraCyan)
+                            )
+                            Text(
+                                text = "A1 SWAARA SOVEREIGN ENGINE",
+                                color = SwaaraCyan,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Studio Master Acoustics & Zero Ad Telemetry",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "100% sovereign audio streaming with 320 kbps bitrates and gapless looping playback.",
+                            color = SwaaraSecondaryText,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Category List Cards
                 categories.forEach { cat ->
@@ -151,9 +237,9 @@ fun SwaaraSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 5.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(18.dp))
                             .background(SwaaraDeepSurface)
-                            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(18.dp))
                             .clickable { activeSubpageId = cat.id }
                             .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
@@ -164,16 +250,17 @@ fun SwaaraSettingsScreen(
                             // Color-Coded Icon Container
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(42.dp)
                                     .clip(CircleShape)
-                                    .background(cat.accentColor.copy(alpha = 0.12f)),
+                                    .background(cat.accentColor.copy(alpha = 0.14f))
+                                    .border(1.dp, cat.accentColor.copy(alpha = 0.30f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     painter = painterResource(id = cat.iconId),
                                     contentDescription = cat.title,
                                     tint = cat.accentColor,
-                                    modifier = Modifier.size(19.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
@@ -183,8 +270,8 @@ fun SwaaraSettingsScreen(
                                 Text(
                                     text = cat.title,
                                     color = SwaaraPrimaryText,
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
@@ -201,7 +288,7 @@ fun SwaaraSettingsScreen(
                             Icon(
                                 painter = painterResource(id = R.drawable.chevron_forward),
                                 contentDescription = null,
-                                tint = SwaaraSecondaryText.copy(alpha = 0.45f),
+                                tint = SwaaraSecondaryText.copy(alpha = 0.50f),
                                 modifier = Modifier.size(16.dp)
                             )
                         }

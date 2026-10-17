@@ -6,7 +6,10 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -14,10 +17,12 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +31,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.varshuai.a1swaara.ui.components.SwaaraMagenta
+import com.varshuai.a1swaara.ui.components.SwaaraCyan
+import com.varshuai.a1swaara.ui.components.SwaaraElevatedSurface
+import com.varshuai.a1swaara.ui.components.SwaaraDeepSurface
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -581,39 +596,88 @@ fun Lyrics(
 
                 if (synchronizedLyrics != null) LazyColumn(
                     state = lazyListState,
-                    userScrollEnabled = false,
+                    userScrollEnabled = true,
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .verticalFadingEdge()
                         .fillMaxWidth()
                 ) {
                     item(key = "header", contentType = 0) {
-                        Spacer(modifier = Modifier.height(maxHeight))
+                        Spacer(modifier = Modifier.height(maxHeight / 2))
                     }
                     itemsIndexed(
                         items = synchronizedLyrics.sentences
                     ) { index, sentence ->
+                        val isCurrent = index == synchronizedLyrics.index
                         val color by animateColorAsState(
-                            if (index == synchronizedLyrics.index) Color.White
-                            else colorPalette.textDisabled
+                            targetValue = if (isCurrent) Color.White else colorPalette.textDisabled.copy(alpha = 0.45f),
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "lyrics_color_$index"
+                        )
+                        val scale by animateFloatAsState(
+                            targetValue = if (isCurrent) 1.05f else 0.96f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "lyrics_scale_$index"
                         )
 
-                        if (sentence.isBlank()) Image(
-                            painter = painterResource(R.drawable.musical_notes),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(color),
+                        val timestamp = synchronizedLyrics.timestamps.getOrNull(index)
+
+                        Box(
                             modifier = Modifier
-                                .padding(vertical = 4.dp, horizontal = 32.dp)
-                                .size(typography.xs.fontSize.dp)
-                        ) else BasicText(
-                            text = sentence,
-                            style = typography.xs.center.medium.color(color),
-                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 32.dp)
-                        )
+                                .fillMaxWidth()
+                                .scale(scale)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (isCurrent) SwaaraMagenta.copy(alpha = 0.16f)
+                                    else Color.Transparent
+                                )
+                                .border(
+                                    width = if (isCurrent) 1.dp else 0.dp,
+                                    color = if (isCurrent) SwaaraMagenta.copy(alpha = 0.35f) else Color.Transparent,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable(
+                                    enabled = timestamp != null && binder?.player != null,
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) {
+                                    if (timestamp != null) {
+                                        val targetPosition = timestamp - (lyrics?.startTime ?: 0L)
+                                        binder?.player?.seekTo(targetPosition.coerceAtLeast(0L))
+                                    }
+                                }
+                                .padding(vertical = 8.dp, horizontal = 20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (sentence.isBlank()) {
+                                Image(
+                                    painter = painterResource(R.drawable.musical_notes),
+                                    contentDescription = null,
+                                    colorFilter = ColorFilter.tint(if (isCurrent) SwaaraMagenta else color),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            } else {
+                                BasicText(
+                                    text = sentence,
+                                    style = typography.xs.center.medium.copy(
+                                        color = color,
+                                        fontSize = if (isCurrent) 18.sp else 15.sp,
+                                        fontWeight = if (isCurrent) FontWeight.Black else FontWeight.Normal,
+                                        textAlign = TextAlign.Center
+                                    )
+                                )
+                            }
+                        }
                     }
                     item(key = "footer", contentType = 0) {
-                        Spacer(modifier = Modifier.height(maxHeight))
+                        Spacer(modifier = Modifier.height(maxHeight / 2))
                     }
                 }
             } else BasicText(
