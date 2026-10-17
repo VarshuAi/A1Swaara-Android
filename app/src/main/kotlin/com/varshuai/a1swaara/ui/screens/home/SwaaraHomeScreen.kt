@@ -136,25 +136,31 @@ fun SwaaraHomeScreen(
 
     var userName by remember { mutableStateOf(initialPrefs.first) }
     var selectedLanguage by remember { mutableStateOf(initialPrefs.second) }
-    var isLoadingFeed by remember { mutableStateOf(true) }
 
-    var liveTrendingSongs by remember { mutableStateOf<List<SwaaraDisplayItem>>(emptyList()) }
-    var liveArtists by remember { mutableStateOf<List<SwaaraArtistDisplayItem>>(emptyList()) }
-    var quickGridItems by remember { mutableStateOf<List<SwaaraDisplayItem>>(emptyList()) }
-    var viralSongs by remember { mutableStateOf<List<SwaaraDisplayItem>>(emptyList()) }
-    var topTwentyList by remember { mutableStateOf<List<SwaaraDisplayItem>>(emptyList()) }
+    var liveTrendingSongs by remember { mutableStateOf<List<SwaaraDisplayItem>>(SwaaraHomeFeedCache.trendingSongs) }
+    var liveArtists by remember { mutableStateOf<List<SwaaraArtistDisplayItem>>(SwaaraHomeFeedCache.liveArtists) }
+    var quickGridItems by remember { mutableStateOf<List<SwaaraDisplayItem>>(SwaaraHomeFeedCache.quickGridItems) }
+    var viralSongs by remember { mutableStateOf<List<SwaaraDisplayItem>>(SwaaraHomeFeedCache.viralSongs) }
+    var topTwentyList by remember { mutableStateOf<List<SwaaraDisplayItem>>(SwaaraHomeFeedCache.topTwentyList) }
+    var communitySongs by remember { mutableStateOf<List<TrendingSong>>(SwaaraHomeFeedCache.communitySongs) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
-    var communitySongs by remember { mutableStateOf<List<TrendingSong>>(emptyList()) }
+    var isLoadingFeed by remember {
+        mutableStateOf(!SwaaraHomeFeedCache.hasDataFor(initialPrefs.second))
+    }
     var showJamDialog by remember { mutableStateOf(false) }
 
     val currentJamRoom by SwaaraListenTogether.currentRoom.collectAsState()
     val remoteConfigState by SwaaraRemoteConfig.configState.collectAsState()
 
     LaunchedEffect(Unit) {
-        coroutineScope.launch(Dispatchers.IO) {
-            val trending = SwaaraCommunityCharts.getTrendingSongs(limit = 20)
-            withContext(Dispatchers.Main) {
-                communitySongs = trending
+        if (communitySongs.isEmpty()) {
+            coroutineScope.launch(Dispatchers.IO) {
+                val trending = SwaaraCommunityCharts.getTrendingSongs(limit = 20)
+                withContext(Dispatchers.Main) {
+                    communitySongs = trending
+                    SwaaraHomeFeedCache.communitySongs = trending
+                }
             }
         }
         coroutineScope.launch(Dispatchers.IO) {
@@ -237,131 +243,155 @@ fun SwaaraHomeScreen(
     }
 
     // Load Live YouTube Music Feed for Selected Language & Personal History
-    val loadLiveFeed: (String) -> Unit = { lang ->
-        isLoadingFeed = true
-        coroutineScope.launch(Dispatchers.IO) {
-            // 1. Fetch real user history from Database for Jump Back In
-            val userHistoryEvents = runCatching {
-                Database.events().first()
-            }.getOrNull().orEmpty()
+    val loadLiveFeed: (String, Boolean) -> Unit = { lang, forceRefresh ->
+        if (forceRefresh || !SwaaraHomeFeedCache.hasDataFor(lang)) {
+            isLoadingFeed = true
+            coroutineScope.launch(Dispatchers.IO) {
+                // 1. Fetch real user history from Database for Jump Back In
+                val userHistoryEvents = runCatching {
+                    Database.events().first()
+                }.getOrNull().orEmpty()
 
-            val historyDisplayItems = userHistoryEvents
-                .map { it.song }
-                .distinctBy { it.id }
-                .take(6)
-                .map { song ->
-                    SwaaraDisplayItem(
-                        id = song.id,
-                        title = song.title,
-                        subtitle = song.artistsText ?: "Artist",
-                        thumbnailUrl = song.thumbnailUrl ?: "https://i.ytimg.com/vi/${song.id}/maxresdefault.jpg"
-                    )
+                val historyDisplayItems = userHistoryEvents
+                    .map { it.song }
+                    .distinctBy { it.id }
+                    .take(6)
+                    .map { song ->
+                        SwaaraDisplayItem(
+                            id = song.id,
+                            title = song.title,
+                            subtitle = song.artistsText ?: "Artist",
+                            thumbnailUrl = song.thumbnailUrl ?: "https://i.ytimg.com/vi/${song.id}/maxresdefault.jpg"
+                        )
+                    }
+
+                // 2. Build smart queries based on selected category / language
+                val isForYou = lang.equals("for_you", ignoreCase = true)
+
+                // If "For You", determine if we can extract top artists/keywords from history
+                val topHistoryArtist = if (isForYou && historyDisplayItems.isNotEmpty()) {
+                    historyDisplayItems.firstOrNull()?.subtitle?.split(",")?.firstOrNull()?.trim()
+                } else null
+
+                val trendingQuery = when {
+                    isForYou && !topHistoryArtist.isNullOrBlank() -> "$topHistoryArtist latest songs hits"
+                    isForYou -> "top trending music hits official"
+                    lang.equals("english", ignoreCase = true) -> "trending top hits official"
+                    else -> "$lang latest trending songs official"
                 }
 
-            // 2. Build smart queries based on selected category / language
-            val isForYou = lang.equals("for_you", ignoreCase = true)
+                val viralQuery = when {
+                    isForYou -> "viral music hits today"
+                    lang.equals("english", ignoreCase = true) -> "top viral songs"
+                    else -> "$lang viral hits chart"
+                }
 
-            // If "For You", determine if we can extract top artists/keywords from history
-            val topHistoryArtist = if (isForYou && historyDisplayItems.isNotEmpty()) {
-                historyDisplayItems.firstOrNull()?.subtitle?.split(",")?.firstOrNull()?.trim()
-            } else null
+                val topChartQuery = when {
+                    isForYou -> "billboard top 50 global hits"
+                    lang.equals("english", ignoreCase = true) -> "billboard top 50"
+                    else -> "$lang top 50 songs chart"
+                }
 
-            val trendingQuery = when {
-                isForYou && !topHistoryArtist.isNullOrBlank() -> "$topHistoryArtist latest songs hits"
-                isForYou -> "top trending music hits official"
-                lang.equals("english", ignoreCase = true) -> "trending top hits official"
-                else -> "$lang latest trending songs official"
-            }
+                val artistQuery = when {
+                    isForYou -> "popular global music artists"
+                    lang.equals("english", ignoreCase = true) -> "popular music artists"
+                    else -> "$lang popular playback singers"
+                }
 
-            val viralQuery = when {
-                isForYou -> "viral music hits today"
-                lang.equals("english", ignoreCase = true) -> "top viral songs"
-                else -> "$lang viral hits chart"
-            }
+                val liveSongsResult = container.searchResultRepository.searchSongs(trendingQuery, null)?.getOrNull()?.items
+                val viralResult = container.searchResultRepository.searchSongs(viralQuery, null)?.getOrNull()?.items
+                val topChartResult = container.searchResultRepository.searchSongs(topChartQuery, null)?.getOrNull()?.items
+                val liveArtistsResult = runCatching {
+                    container.searchResultRepository.searchArtists(artistQuery, null)?.getOrNull()?.items
+                }.getOrNull()
 
-            val topChartQuery = when {
-                isForYou -> "billboard top 50 global hits"
-                lang.equals("english", ignoreCase = true) -> "billboard top 50"
-                else -> "$lang top 50 songs chart"
-            }
+                withContext(Dispatchers.Main) {
+                    val mappedSongs = (!liveSongsResult.isNullOrEmpty()).let { hasSongs ->
+                        if (hasSongs) {
+                            liveSongsResult!!.map { item ->
+                                SwaaraDisplayItem(
+                                    id = item.key,
+                                    title = item.info?.name ?: "Unknown Title",
+                                    subtitle = item.authors?.joinToString { it.name.orEmpty() }?.replace(Regex("[,&\\s]{2,}"), ", ")?.trim(',', ' ') ?: "Various Artists",
+                                    thumbnailUrl = item.thumbnail?.url?.thumbnail(800) ?: "https://i.ytimg.com/vi/${item.key}/maxresdefault.jpg"
+                                )
+                            }
+                        } else emptyList()
+                    }
 
-            val artistQuery = when {
-                isForYou -> "popular global music artists"
-                lang.equals("english", ignoreCase = true) -> "popular music artists"
-                else -> "$lang popular playback singers"
-            }
+                    liveTrendingSongs = mappedSongs
 
-            val liveSongsResult = container.searchResultRepository.searchSongs(trendingQuery, null)?.getOrNull()?.items
-            val viralResult = container.searchResultRepository.searchSongs(viralQuery, null)?.getOrNull()?.items
-            val topChartResult = container.searchResultRepository.searchSongs(topChartQuery, null)?.getOrNull()?.items
-            val liveArtistsResult = runCatching {
-                container.searchResultRepository.searchArtists(artistQuery, null)?.getOrNull()?.items
-            }.getOrNull()
+                    // Set Jump Back In: Prioritize real user listening history, fallback to trending
+                    val resolvedQuickGrid = if (historyDisplayItems.isNotEmpty()) {
+                        if (historyDisplayItems.size < 6 && mappedSongs.isNotEmpty()) {
+                            val historyIds = historyDisplayItems.map { it.id }.toSet()
+                            val filler = mappedSongs.filter { it.id !in historyIds }.take(6 - historyDisplayItems.size)
+                            historyDisplayItems + filler
+                        } else {
+                            historyDisplayItems
+                        }
+                    } else {
+                        mappedSongs.take(6)
+                    }
+                    quickGridItems = resolvedQuickGrid
 
-            withContext(Dispatchers.Main) {
-                val mappedSongs = (!liveSongsResult.isNullOrEmpty()).let { hasSongs ->
-                    if (hasSongs) {
-                        liveSongsResult!!.map { item ->
+                    val resolvedArtists = if (!liveArtistsResult.isNullOrEmpty()) {
+                        liveArtistsResult.take(12).map { item ->
+                            SwaaraArtistDisplayItem(
+                                id = item.key,
+                                name = item.info?.name ?: "Artist",
+                                thumbnailUrl = item.thumbnail?.url?.thumbnail(800)
+                            )
+                        }
+                    } else emptyList()
+                    liveArtists = resolvedArtists
+
+                    val resolvedViral = if (!viralResult.isNullOrEmpty()) {
+                        viralResult.map { item ->
                             SwaaraDisplayItem(
                                 id = item.key,
-                                title = item.info?.name ?: "Unknown Title",
-                                subtitle = item.authors?.joinToString { it.name.orEmpty() }?.replace(Regex("[,&\\s]{2,}"), ", ")?.trim(',', ' ') ?: "Various Artists",
+                                title = item.info?.name ?: "Viral Hit",
+                                subtitle = item.authors?.joinToString { it.name.orEmpty() }?.replace(Regex("[,&\\s]{2,}"), ", ")?.trim(',', ' ') ?: "Artist",
                                 thumbnailUrl = item.thumbnail?.url?.thumbnail(800) ?: "https://i.ytimg.com/vi/${item.key}/maxresdefault.jpg"
                             )
                         }
                     } else emptyList()
+                    viralSongs = resolvedViral
+
+                    val allSongs = (topChartResult ?: liveSongsResult).orEmpty()
+                    val resolvedTopTwenty = if (allSongs.isNotEmpty()) {
+                        allSongs.take(20).map { item ->
+                            SwaaraDisplayItem(
+                                id = item.key,
+                                title = item.info?.name ?: "Top Song",
+                                subtitle = item.authors?.joinToString { it.name.orEmpty() }?.replace(Regex("[,&\\s]{2,}"), ", ")?.trim(',', ' ') ?: "Artist",
+                                thumbnailUrl = item.thumbnail?.url?.thumbnail(800) ?: "https://i.ytimg.com/vi/${item.key}/maxresdefault.jpg"
+                            )
+                        }
+                    } else emptyList()
+                    topTwentyList = resolvedTopTwenty
+
+                    // Persist to in-memory cache so leaving and returning from Settings does not reload
+                    SwaaraHomeFeedCache.cachedLanguage = lang
+                    SwaaraHomeFeedCache.trendingSongs = mappedSongs
+                    SwaaraHomeFeedCache.quickGridItems = resolvedQuickGrid
+                    SwaaraHomeFeedCache.liveArtists = resolvedArtists
+                    SwaaraHomeFeedCache.viralSongs = resolvedViral
+                    SwaaraHomeFeedCache.topTwentyList = resolvedTopTwenty
+                    SwaaraHomeFeedCache.isInitialized = true
+
+                    isLoadingFeed = false
+                    isRefreshing = false
                 }
-
-                liveTrendingSongs = mappedSongs
-
-                // Set Jump Back In: Prioritize real user listening history, fallback to trending
-                if (historyDisplayItems.isNotEmpty()) {
-                    if (historyDisplayItems.size < 6 && mappedSongs.isNotEmpty()) {
-                        val historyIds = historyDisplayItems.map { it.id }.toSet()
-                        val filler = mappedSongs.filter { it.id !in historyIds }.take(6 - historyDisplayItems.size)
-                        quickGridItems = historyDisplayItems + filler
-                    } else {
-                        quickGridItems = historyDisplayItems
-                    }
-                } else {
-                    quickGridItems = mappedSongs.take(6)
-                }
-
-                if (!liveArtistsResult.isNullOrEmpty()) {
-                    liveArtists = liveArtistsResult.take(12).map { item ->
-                        SwaaraArtistDisplayItem(
-                            id = item.key,
-                            name = item.info?.name ?: "Artist",
-                            thumbnailUrl = item.thumbnail?.url?.thumbnail(800)
-                        )
-                    }
-                }
-
-                if (!viralResult.isNullOrEmpty()) {
-                    viralSongs = viralResult.map { item ->
-                        SwaaraDisplayItem(
-                            id = item.key,
-                            title = item.info?.name ?: "Viral Hit",
-                            subtitle = item.authors?.joinToString { it.name.orEmpty() }?.replace(Regex("[,&\\s]{2,}"), ", ")?.trim(',', ' ') ?: "Artist",
-                            thumbnailUrl = item.thumbnail?.url?.thumbnail(800) ?: "https://i.ytimg.com/vi/${item.key}/maxresdefault.jpg"
-                        )
-                    }
-                }
-
-                val allSongs = (topChartResult ?: liveSongsResult).orEmpty()
-                if (allSongs.isNotEmpty()) {
-                    topTwentyList = allSongs.take(20).map { item ->
-                        SwaaraDisplayItem(
-                            id = item.key,
-                            title = item.info?.name ?: "Top Song",
-                            subtitle = item.authors?.joinToString { it.name.orEmpty() }?.replace(Regex("[,&\\s]{2,}"), ", ")?.trim(',', ' ') ?: "Artist",
-                            thumbnailUrl = item.thumbnail?.url?.thumbnail(800) ?: "https://i.ytimg.com/vi/${item.key}/maxresdefault.jpg"
-                        )
-                    }
-                }
-
-                isLoadingFeed = false
             }
+        } else {
+            // Restore from cache with zero delay or network overhead
+            liveTrendingSongs = SwaaraHomeFeedCache.trendingSongs
+            quickGridItems = SwaaraHomeFeedCache.quickGridItems
+            liveArtists = SwaaraHomeFeedCache.liveArtists
+            viralSongs = SwaaraHomeFeedCache.viralSongs
+            topTwentyList = SwaaraHomeFeedCache.topTwentyList
+            isLoadingFeed = false
         }
     }
 
@@ -369,7 +399,7 @@ fun SwaaraHomeScreen(
         val p = context.getSharedPreferences("swaara_prefs", Context.MODE_PRIVATE)
         userName = p.getString("user_name", "Music Lover") ?: "Music Lover"
         p.edit().putString("active_language", selectedLanguage).apply()
-        loadLiveFeed(selectedLanguage)
+        loadLiveFeed(selectedLanguage, false)
     }
 
     val greeting = remember {
@@ -415,6 +445,38 @@ fun SwaaraHomeScreen(
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Manual Refresh Feed Button
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(SwaaraElevatedSurface)
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
+                        .clickable {
+                            if (!isRefreshing && !isLoadingFeed) {
+                                isRefreshing = true
+                                context.toast("Refreshing chartbusters...")
+                                loadLiveFeed(selectedLanguage, true)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = SwaaraMagenta,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.sync),
+                            contentDescription = "Refresh Feed",
+                            tint = SwaaraPrimaryText,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .size(38.dp)

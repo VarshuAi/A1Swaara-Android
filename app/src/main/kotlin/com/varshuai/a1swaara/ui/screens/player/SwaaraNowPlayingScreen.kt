@@ -1205,8 +1205,12 @@ fun SwaaraNowPlayingScreen(
                                             onDragStart = { totalDrag = 0f },
                                             onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
                                             onDragEnd = {
-                                                if (totalDrag < -80f) player.forceSeekToNext()
-                                                else if (totalDrag > 80f) player.forceSeekToPrevious()
+                                                // Swipe right -> Next Track, Swipe left -> Previous Track
+                                                if (totalDrag > 60f) {
+                                                    player.forceSeekToNext()
+                                                } else if (totalDrag < -60f) {
+                                                    player.forceSeekToPrevious()
+                                                }
                                             }
                                         )
                                     },
@@ -1413,18 +1417,21 @@ fun SwaaraNowPlayingScreen(
                             }
                         }
 
-                        // Col 2: Previous Track
+                        // Col 2: Previous Track (Swipe Left on Artwork or Tap)
                         Box(
                             modifier = Modifier.weight(1f),
                             contentAlignment = Alignment.Center
                         ) {
                             IconButton(
-                                onClick = { player.forceSeekToPrevious() },
+                                onClick = {
+                                    context.toast("Swipe left on artwork for previous track")
+                                    player.forceSeekToPrevious()
+                                },
                                 modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.play_skip_back),
-                                    contentDescription = "Previous",
+                                    contentDescription = "Previous Track (Swipe Left)",
                                     tint = SwaaraPrimaryText,
                                     modifier = Modifier.size(28.dp)
                                 )
@@ -1446,18 +1453,21 @@ fun SwaaraNowPlayingScreen(
                             )
                         }
 
-                        // Col 4: Next Track
+                        // Col 4: Next Track (Swipe Right on Artwork or Tap)
                         Box(
                             modifier = Modifier.weight(1f),
                             contentAlignment = Alignment.Center
                         ) {
                             IconButton(
-                                onClick = { player.forceSeekToNext() },
+                                onClick = {
+                                    context.toast("Swipe right on artwork for next track")
+                                    player.forceSeekToNext()
+                                },
                                 modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.play_skip_forward),
-                                    contentDescription = "Next",
+                                    contentDescription = "Next Track (Swipe Right)",
                                     tint = SwaaraPrimaryText,
                                     modifier = Modifier.size(28.dp)
                                 )

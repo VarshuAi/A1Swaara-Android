@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,14 +15,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -95,25 +99,79 @@ fun ArtistOverview(
         ) {
             Box(modifier = Modifier.padding(endPaddingValues)) {
                 headerContent {
-                    youtubeArtistPage?.shuffleEndpoint?.let { endpoint ->
-                        SecondaryTextButton(
-                            text = stringResource(R.string.shuffle),
-                            onClick = {
-                                binder?.stopRadio()
-                                binder?.playRadio(endpoint)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        youtubeArtistPage?.shuffleEndpoint?.let { endpoint ->
+                            SecondaryTextButton(
+                                text = stringResource(R.string.shuffle),
+                                onClick = {
+                                    binder?.stopRadio()
+                                    binder?.playRadio(endpoint)
+                                }
+                            )
+                        }
+                        youtubeArtistPage?.subscribersCountText?.let { subscribers ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                BasicText(
+                                    text = stringResource(R.string.format_subscribers, subscribers),
+                                    style = typography.xxs.medium.copy(color = Color(0xFF20CFFF))
+                                )
                             }
-                        )
-                    }
-                    youtubeArtistPage?.subscribersCountText?.let { subscribers ->
-                        BasicText(
-                            text = stringResource(R.string.format_subscribers, subscribers),
-                            style = typography.xxs.medium.copy(color = Color(0xFFA0A0AB))
-                        )
+                        }
                     }
                 }
             }
 
-            if (!isLandscape) thumbnailContent()
+            if (!isLandscape) {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 16.dp)
+                        .size(170.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Ambient Glow behind artist portrait
+                    Box(
+                        modifier = Modifier
+                            .size(165.dp)
+                            .clip(CircleShape)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.radialGradient(
+                                    listOf(
+                                        Color(0xFF8B35FF).copy(alpha = 0.45f),
+                                        Color(0xFFFF2DAA).copy(alpha = 0.20f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(150.dp)
+                            .clip(CircleShape)
+                            .border(
+                                2.dp,
+                                androidx.compose.ui.graphics.Brush.sweepGradient(
+                                    listOf(
+                                        Color(0xFFFF2DAA),
+                                        Color(0xFF8B35FF),
+                                        Color(0xFF20CFFF),
+                                        Color(0xFFFF2DAA)
+                                    )
+                                ),
+                                CircleShape
+                            )
+                    ) {
+                        thumbnailContent()
+                    }
+                }
+            }
 
             youtubeArtistPage?.let { artist ->
                 artist.songs?.let { songs ->

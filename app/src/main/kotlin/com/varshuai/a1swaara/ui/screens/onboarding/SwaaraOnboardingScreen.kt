@@ -117,26 +117,36 @@ fun SwaaraOnboardingScreen(
             .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Top Brand Icon & Welcome Title
+        // Hero Brand Showcase
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(52.dp)
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        ambientColor = Color.Black.copy(alpha = 0.8f),
+                        spotColor = SwaaraMagenta.copy(alpha = 0.5f)
+                    )
+                    .clip(RoundedCornerShape(16.dp))
                     .background(SwaaraElevatedSurface)
-                    .border(1.dp, SwaaraMagenta.copy(alpha = 0.40f), RoundedCornerShape(14.dp)),
+                    .border(
+                        1.5.dp,
+                        Brush.linearGradient(listOf(SwaaraMagenta, SwaaraViolet, SwaaraCyan)),
+                        RoundedCornerShape(16.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.foundation.Image(
                     painter = painterResource(id = R.drawable.a1_swaara_logo),
                     contentDescription = "A1 Swaara",
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(42.dp)
                 )
             }
 
@@ -144,42 +154,61 @@ fun SwaaraOnboardingScreen(
                 Text(
                     text = "Welcome to A1 Swaara",
                     color = SwaaraPrimaryText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.3).sp
                 )
                 Text(
-                    text = "Select languages you love listening to",
-                    color = SwaaraSecondaryText,
-                    fontSize = 12.5.sp
+                    text = "High-Fidelity Sovereign Audio Experience",
+                    color = SwaaraCyan.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Optional Name Input Field
+        // Frosted Glass Name Input Container
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(SwaaraDeepSurface)
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(SwaaraDeepSurface.copy(alpha = 0.92f))
+                .border(
+                    1.dp,
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.12f),
+                            Color.White.copy(alpha = 0.04f)
+                        )
+                    ),
+                    RoundedCornerShape(18.dp)
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(id = R.drawable.person),
-                    contentDescription = null,
-                    tint = SwaaraCyan,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(SwaaraElevatedSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.person),
+                        contentDescription = null,
+                        tint = SwaaraCyan,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
                 BasicTextField(
                     value = userNameInput,
                     onValueChange = { userNameInput = it },
                     textStyle = TextStyle(
                         color = SwaaraPrimaryText,
-                        fontSize = 13.5.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     ),
                     cursorBrush = SolidColor(SwaaraCyan),
@@ -188,8 +217,8 @@ fun SwaaraOnboardingScreen(
                     decorationBox = { innerTextField ->
                         if (userNameInput.isEmpty()) {
                             Text(
-                                text = "Your name (Optional, e.g. Varshan)",
-                                color = SwaaraSecondaryText.copy(alpha = 0.5f),
+                                text = "Enter your display name (e.g. Varshan)",
+                                color = SwaaraSecondaryText.copy(alpha = 0.6f),
                                 fontSize = 13.5.sp
                             )
                         }
@@ -199,7 +228,29 @@ fun SwaaraOnboardingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Section Title
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Choose Your Sonic Languages",
+                color = SwaaraPrimaryText,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "${selectedLanguages.size} selected",
+                color = SwaaraMagenta,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Languages Grid
         LazyVerticalGrid(
@@ -215,8 +266,8 @@ fun SwaaraOnboardingScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(72.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .height(74.dp)
+                        .clip(RoundedCornerShape(18.dp))
                         .background(
                             if (isSelected) SwaaraElevatedSurface
                             else SwaaraDeepSurface
@@ -224,8 +275,8 @@ fun SwaaraOnboardingScreen(
                         .border(
                             1.5.dp,
                             if (isSelected) Brush.horizontalGradient(listOf(SwaaraMagenta, SwaaraViolet))
-                            else Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.04f), Color.White.copy(alpha = 0.04f))),
-                            RoundedCornerShape(16.dp)
+                            else Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.05f))),
+                            RoundedCornerShape(18.dp)
                         )
                         .clickable {
                             if (isSelected) {
@@ -243,12 +294,18 @@ fun SwaaraOnboardingScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Artist Portrait
+                        // Artist Portrait with fallback
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(50.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF202030))
+                                .background(Color(0xFF1E1E2E))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) SwaaraCyan.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.08f),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
                                 model = lang.avatarUrl,
@@ -281,7 +338,7 @@ fun SwaaraOnboardingScreen(
                         if (isSelected) {
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(22.dp)
                                     .clip(CircleShape)
                                     .background(Brush.horizontalGradient(listOf(SwaaraMagenta, SwaaraViolet))),
                                 contentAlignment = Alignment.Center
@@ -301,41 +358,50 @@ fun SwaaraOnboardingScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Get Started Button
+        // Get Started Action Button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(54.dp)
                 .shadow(
-                    elevation = 16.dp,
-                    shape = RoundedCornerShape(26.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.6f),
-                    spotColor = SwaaraMagenta.copy(alpha = 0.45f)
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(27.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.7f),
+                    spotColor = SwaaraMagenta.copy(alpha = 0.55f)
                 )
-                .clip(RoundedCornerShape(26.dp))
-                .background(Brush.horizontalGradient(listOf(SwaaraMagenta, SwaaraViolet)))
+                .clip(RoundedCornerShape(27.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            SwaaraMagenta,
+                            SwaaraViolet,
+                            SwaaraCyan.copy(alpha = 0.8f)
+                        )
+                    )
+                )
                 .clickable { completeWelcome() },
             contentAlignment = Alignment.Center
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
                     text = "Start Listening to A1 Swaara",
                     color = Color.White,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.3.sp
                 )
                 Icon(
                     painter = painterResource(id = R.drawable.play),
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
     }
 }

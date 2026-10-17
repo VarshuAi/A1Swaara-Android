@@ -1,13 +1,17 @@
 package com.varshuai.a1swaara.ui.components
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
@@ -64,30 +68,44 @@ fun RetryingAsyncImage(
         retryKey++
     }
 
-    key(retryKey) {
-        AsyncImage(
-            model = model,
-            contentDescription = contentDescription,
-            modifier = modifier,
-            contentScale = contentScale,
-            error = error,
-            alpha = alpha,
-            colorFilter = colorFilter,
-            filterQuality = filterQuality,
-            onSuccess = {
-                retryAttempt = 0
-                retryGeneration = 0
-            },
-            onError = { result ->
-                if (
-                    result.result.throwable.isTransientImageFailure() &&
-                    retryAttempt < retryDelaysMs.size
-                ) {
-                    retryAttempt++
-                    retryGeneration++
-                }
-            },
-        )
+    var isLoading by remember(model) { mutableStateOf(true) }
+    var isFailed by remember(model) { mutableStateOf(false) }
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (isLoading || isFailed) {
+            SwaaraAnimatedThumbnailPlaceholder(modifier = Modifier.fillMaxSize())
+        }
+
+        key(retryKey) {
+            AsyncImage(
+                model = model,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
+                error = error,
+                alpha = if (isLoading || isFailed) 0f else alpha,
+                colorFilter = colorFilter,
+                filterQuality = filterQuality,
+                onSuccess = {
+                    isLoading = false
+                    isFailed = false
+                    retryAttempt = 0
+                    retryGeneration = 0
+                },
+                onError = { result ->
+                    if (
+                        result.result.throwable.isTransientImageFailure() &&
+                        retryAttempt < retryDelaysMs.size
+                    ) {
+                        retryAttempt++
+                        retryGeneration++
+                    } else {
+                        isLoading = false
+                        isFailed = true
+                    }
+                },
+            )
+        }
     }
 }
 
